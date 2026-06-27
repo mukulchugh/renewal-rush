@@ -8,23 +8,23 @@
     "path": "/Users/mukulchugh/Documents/Unreal Projects/MyProject"
   },
   "session": {
-    "phase": "prototype-3d-playable",
+    "phase": "web-polish",
     "currentLesson": "lesson-03-signal-triage",
     "agentStatus": "ready",
-    "agentMessage": "Renewal Rush 3D is live — WASD + mouse in the command center. Stack pillars connect, floating orbs spawn, click to deploy Agent Pulse. Unreal arena wired as Lvl_ArenaShooter default.",
-    "mcpConnected": true,
+    "agentMessage": "Web-first locked. Renewal Rush 3D polished — smooth movement, hover crosshair, deploy juice, audio, spawn easing. Ship target: embed on quivly.ai.",
+    "mcpConnected": false,
     "mcpUrl": "http://127.0.0.1:8000/mcp",
-    "unrealRunning": true
+    "unrealRunning": false
   },
   "liveArtifact": {
-    "title": "Renewal Rush 3D — command center",
+    "title": "Renewal Rush — web 3D (ship target)",
     "type": "renewal-rush-3d.html",
     "highlight": "game"
   },
   "nextActions": [
-    "Play renewal-rush-3d.html — verify FPS feel + orb deploy loop",
-    "Unreal: Press Play on Lvl_ArenaShooter for full-engine 3D arena",
-    "Wire 90s timer + ARR HUD in BP_ShooterGameMode blueprints"
+    "Play renewal-rush-3d.html — feel-test movement + deploy loop",
+    "Embed on quivly.ai / add leaderboard",
+    "Optional: integration logos, share score screenshot"
   ],
   "userInputPending": []
 }

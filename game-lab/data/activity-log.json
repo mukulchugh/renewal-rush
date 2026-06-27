@@ -79,6 +79,16 @@
       "time": "2026-06-27T22:15:00Z",
       "who": "agent",
       "text": "Renewal Rush 3D shipped: renewal-rush-3d.html (Three.js FPS) — WASD, pointer-lock aim, floating orbs, stack pillars. Unreal MCP pass: 5 AccountOrbs labeled, gun hidden, Lvl_ArenaShooter set as default map."
+    },
+    {
+      "time": "2026-06-27T23:00:00Z",
+      "who": "you",
+      "text": "Web is better distribution — want smoothest, highest-quality gameplay."
+    },
+    {
+      "time": "2026-06-27T23:05:00Z",
+      "who": "agent",
+      "text": "Web-first locked in AGENTS.md. renewal-rush-3d.html polish pass: accel movement, smooth look, hover crosshair, spawn easing, deploy pulse/audio/flash, HUD pop, timer urgency. Unreal demoted to sandbox."
     }
   ]
 }

@@ -11,7 +11,7 @@ HTML = GAME_LAB / "renewal-rush-3d.html"
 
 REQUIRED = [
     "three.module.js",
-    "Renewal Rush 3D",
+    "Renewal Rush",
     "CONNECT_MS",
     "GAME_MS",
     "requestPointerLock",
@@ -20,6 +20,10 @@ REQUIRED = [
     "quivly-logo-forest-white.webp",
     "Chief Renewal Officer",
     "INTEGRATIONS",
+    "MAX_ORBS",
+    "powerPreference",
+    "AudioContext",
+    "Full Stack draft",
 ]
 
 

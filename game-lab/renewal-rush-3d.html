@@ -3,88 +3,135 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Renewal Rush 3D — Quivly</title>
+  <title>Renewal Rush — Quivly</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
+    :root {
+      --accent: #6366f1;
+      --bg: #0a0a0a;
+      --surface: #171717;
+      --border: #333;
+      --text: #fafafa;
+      --muted: #a3a3a3;
+      --green: #34d399;
+      --red: #f87171;
+      --gold: #fcd34d;
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; font-family: Inter, system-ui, sans-serif; }
-    #canvas { display: block; width: 100%; height: 100%; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: var(--bg); font-family: Inter, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    #canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     .hud {
-      position: fixed; inset: 0; pointer-events: none; color: #fafafa;
+      position: fixed; inset: 0; pointer-events: none; color: var(--text);
       display: flex; flex-direction: column; justify-content: space-between;
-      padding: 16px 20px;
+      padding: 16px 20px; z-index: 2;
     }
     .hud-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
     .hud-left img { height: 24px; }
-    .hud-left h1 { font-size: 0.85rem; font-weight: 600; margin-top: 6px; }
-    .hud-left span { color: #a3a3a3; font-weight: 400; }
+    .hud-left h1 { font-size: 0.85rem; font-weight: 600; margin-top: 6px; letter-spacing: -0.02em; }
+    .hud-left span { color: var(--muted); font-weight: 400; }
     .stats { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
     .pill {
       font-family: "IBM Plex Mono", monospace; font-size: 0.65rem;
       padding: 6px 10px; border-radius: 8px; background: #171717cc;
-      border: 1px solid #333; backdrop-filter: blur(8px);
+      border: 1px solid var(--border); backdrop-filter: blur(12px);
+      transition: border-color 0.2s, transform 0.15s;
     }
-    .pill strong { color: #6366f1; }
+    .pill strong { color: var(--accent); transition: transform 0.2s; display: inline-block; }
+    .pill.pop strong { animation: pop 0.35s ease; }
+    .pill.urgent { border-color: var(--red); animation: pulse-border 0.8s ease infinite; }
+    @keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.25); } 100% { transform: scale(1); } }
+    @keyframes pulse-border { 0%, 100% { box-shadow: 0 0 0 0 #f8717133; } 50% { box-shadow: 0 0 12px 2px #f8717144; } }
     .crosshair {
-      position: fixed; left: 50%; top: 50%; width: 20px; height: 20px;
-      margin: -10px 0 0 -10px; pointer-events: none;
+      position: fixed; left: 50%; top: 50%; width: 24px; height: 24px;
+      margin: -12px 0 0 -12px; pointer-events: none; z-index: 3;
+      transition: transform 0.12s ease;
     }
     .crosshair::before, .crosshair::after {
-      content: ""; position: absolute; background: #6366f1aa;
+      content: ""; position: absolute; border-radius: 1px;
+      background: #6366f1bb; transition: background 0.12s, transform 0.12s;
     }
-    .crosshair::before { left: 9px; top: 4px; width: 2px; height: 12px; }
-    .crosshair::after { top: 9px; left: 4px; height: 2px; width: 12px; }
+    .crosshair::before { left: 11px; top: 5px; width: 2px; height: 14px; }
+    .crosshair::after { top: 11px; left: 5px; height: 2px; width: 14px; }
+    .crosshair.target::before, .crosshair.target::after { background: var(--red); transform: scale(1.15); }
+    .crosshair.bad::before, .crosshair.bad::after { background: var(--green); }
+    .crosshair.deploy { transform: scale(0.7); }
     .banner {
-      text-align: center; font-size: 0.8rem; color: #a3a3a3;
-      background: #171717aa; border: 1px solid #333; border-radius: 8px;
-      padding: 8px 16px; align-self: center; backdrop-filter: blur(8px);
+      text-align: center; font-size: 0.8rem; color: var(--muted);
+      background: #171717aa; border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 18px; align-self: center; backdrop-filter: blur(12px);
+      transition: color 0.2s, border-color 0.2s;
     }
-    .banner.active { color: #6366f1; border-color: #6366f1; }
-    .churn-wrap { max-width: 320px; align-self: center; width: 100%; }
-    .churn-label { font-size: 0.6rem; color: #a3a3a3; margin-bottom: 4px; display: flex; justify-content: space-between; }
-    .churn-bar { height: 5px; background: #262626; border-radius: 3px; overflow: hidden; }
-    .churn-fill { height: 100%; background: linear-gradient(90deg, #34d399, #fbbf24, #f87171); transition: width 0.3s; }
+    .banner.active { color: var(--accent); border-color: var(--accent); }
+    .churn-wrap { max-width: 340px; align-self: center; width: 100%; }
+    .churn-label { font-size: 0.6rem; color: var(--muted); margin-bottom: 4px; display: flex; justify-content: space-between; }
+    .churn-bar { height: 6px; background: #262626; border-radius: 4px; overflow: hidden; }
+    .churn-fill {
+      height: 100%; background: linear-gradient(90deg, var(--green), #fbbf24, var(--red));
+      transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .flash {
+      position: fixed; inset: 0; background: #6366f122; pointer-events: none;
+      opacity: 0; z-index: 4; transition: opacity 0.08s;
+    }
+    .flash.on { opacity: 1; }
     .overlay {
       position: fixed; inset: 0; background: #000c; display: grid; place-items: center;
       z-index: 10; pointer-events: auto;
     }
     .overlay.hidden { display: none; }
     .modal {
-      max-width: 400px; width: 90%; background: #171717; border: 1px solid #333;
-      border-radius: 20px; padding: 28px; text-align: center;
+      max-width: 420px; width: 90%; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; padding: 32px; text-align: center;
+      box-shadow: 0 24px 80px #0008;
     }
     .modal img { height: 32px; margin-bottom: 16px; }
-    .modal h2 { font-size: 1.4rem; margin-bottom: 8px; }
-    .modal p { color: #a3a3a3; font-size: 0.9rem; line-height: 1.5; margin-bottom: 20px; }
+    .modal h2 { font-size: 1.5rem; margin-bottom: 8px; letter-spacing: -0.03em; }
+    .modal p { color: var(--muted); font-size: 0.9rem; line-height: 1.55; margin-bottom: 22px; }
     .btn {
-      background: #6366f1; color: #fff; border: none; border-radius: 10px;
-      padding: 12px 24px; font-weight: 600; cursor: pointer; font-size: 0.9rem;
+      background: var(--accent); color: #fff; border: none; border-radius: 10px;
+      padding: 13px 28px; font-weight: 600; cursor: pointer; font-size: 0.9rem;
+      transition: transform 0.15s, filter 0.15s;
     }
-    .hint { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
-      font-size: 0.65rem; color: #666; pointer-events: none; }
+    .btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .hint {
+      position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
+      font-size: 0.65rem; color: #555; pointer-events: none; z-index: 2;
+    }
     .floater {
-      position: fixed; font-family: "IBM Plex Mono", monospace; font-size: 0.8rem;
-      color: #6366f1; pointer-events: none; animation: up 1s forwards;
-      text-shadow: 0 2px 8px #000;
+      position: fixed; font-family: "IBM Plex Mono", monospace; font-size: 0.82rem;
+      color: var(--accent); pointer-events: none; z-index: 5;
+      animation: float-up 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      text-shadow: 0 2px 12px #000;
     }
-    .floater.bad { color: #f87171; }
-    @keyframes up { to { opacity: 0; transform: translateY(-40px); } }
-    a.back { position: fixed; bottom: 12px; left: 12px; font-size: 0.7rem; color: #666; z-index: 5; }
+    .floater.bad { color: var(--red); }
+    .floater.gold { color: var(--gold); }
+    @keyframes float-up { to { opacity: 0; transform: translateY(-48px) scale(1.05); } }
+    a.back { position: fixed; bottom: 12px; left: 12px; font-size: 0.7rem; color: #555; z-index: 5; text-decoration: none; }
+    a.back:hover { color: var(--muted); }
   </style>
 </head>
 <body>
   <canvas id="canvas"></canvas>
+  <div class="flash" id="flash"></div>
   <div class="crosshair" id="crosshair"></div>
   <div class="hud" id="hud" style="visibility:hidden">
     <div class="hud-top">
       <div class="hud-left">
-        <img src="assets/brand/quivly-logo-forest-white.webp" alt="" />
-        <h1>Renewal Rush <span>3D</span></h1>
+        <img src="assets/brand/quivly-logo-forest-white.webp" alt="Quivly" />
+        <h1>Renewal Rush</h1>
       </div>
       <div class="stats">
-        <div class="pill">Renewal <strong id="t-timer">90</strong>s</div>
-        <div class="pill">ARR <strong id="t-arr">$0</strong></div>
-        <div class="pill">Signals <strong id="t-sig">0</strong></div>
-        <div class="pill">Stack <strong id="t-stack">0%</strong></div>
+        <div class="pill timer" id="pill-timer">Renewal <strong id="t-timer">90</strong>s</div>
+        <div class="pill" id="pill-arr">ARR <strong id="t-arr">$0</strong></div>
+        <div class="pill" id="pill-sig">Signals <strong id="t-sig">0</strong></div>
+        <div class="pill" id="pill-stack">Stack <strong id="t-stack">0%</strong></div>
       </div>
     </div>
     <div class="banner" id="banner">Click to aim · Left-click deploy Agent Pulse</div>
@@ -99,8 +146,8 @@
   <div class="overlay" id="title">
     <div class="modal">
       <img src="assets/brand/quivly-logo-forest-white.webp" alt="" />
-      <h2>Renewal Rush 3D</h2>
-      <p>Customer Command arena. Connect your stack, surface floating account signals, deploy Agent Pulse before renewal day.</p>
+      <h2>Renewal Rush</h2>
+      <p>Connect your stack. Surface every signal — market to CRM. Deploy Agent Pulse before renewal day.</p>
       <button class="btn" id="start">Enter command center</button>
     </div>
   </div>
@@ -108,8 +155,8 @@
     <div class="modal">
       <img src="assets/brand/quivly-logo-forest-white.webp" alt="" />
       <h2 id="end-title">You saved the quarter.</h2>
-      <p id="end-rank" style="color:#fcd34d;font-weight:600"></p>
-      <p id="end-stats" style="font-family:monospace;font-size:0.85rem"></p>
+      <p id="end-rank" style="color:var(--gold);font-weight:600"></p>
+      <p id="end-stats" style="font-family:monospace;font-size:0.85rem;color:var(--muted)"></p>
       <button class="btn" id="replay">Play again</button>
     </div>
   </div>
@@ -124,17 +171,51 @@
     const COMPANIES = ["Vertex Labs", "CloudNine", "DataForge", "Pulse AI", "Stackline", "Northbeam"];
     const CONNECT_MS = 10000;
     const GAME_MS = 90000;
+    const MAX_ORBS = 9;
     const COLORS = { healthy: 0x34d399, expansion: 0xfbbf24, atRisk: 0xf87171, accent: 0x6366f1, market: 0xa78bfa };
+
+    const MOVE = { accel: 22, friction: 14, maxSpeed: 5.8 };
+    const LOOK = { sens: 0.0018, smooth: 14 };
 
     let renderer, scene, camera, clock;
     let orbs = [];
     let stackMeshes = [];
+    let pulses = [];
     let state = {};
     let keys = {};
     let pointerLocked = false;
     let raycaster = new THREE.Raycaster();
     let mouse = new THREE.Vector2(0, 0);
-    let timers = [];
+    let timeouts = [];
+    let intervals = [];
+    let hoverOrb = null;
+    let audioCtx = null;
+    let lastHud = { arr: 0, sig: 0, timer: 90 };
+
+    const reusable = {
+      dir: new THREE.Vector3(),
+      right: new THREE.Vector3(),
+      wish: new THREE.Vector3(),
+    };
+
+    const orbGeo = [
+      new THREE.SphereGeometry(0.34, 32, 32),
+      new THREE.SphereGeometry(0.39, 32, 32),
+      new THREE.SphereGeometry(0.44, 32, 32),
+    ];
+    const ringGeo = new THREE.TorusGeometry(0.52, 0.018, 8, 48);
+    const matCache = {};
+
+    function matFor(color, opacity = 0.94) {
+      const key = color + "-" + opacity;
+      if (!matCache[key]) {
+        matCache[key] = new THREE.MeshStandardMaterial({
+          color, emissive: color, emissiveIntensity: 0.55,
+          metalness: 0.35, roughness: 0.18, transparent: true, opacity,
+        });
+      }
+      return matCache[key];
+    }
 
     function $(id) { return document.getElementById(id); }
 
@@ -143,58 +224,111 @@
     }
 
     function clearTimers() {
-      timers.forEach((t) => clearInterval(t));
-      timers.forEach((t) => clearTimeout(t));
-      timers = [];
+      timeouts.forEach(clearTimeout);
+      intervals.forEach(clearInterval);
+      timeouts = [];
+      intervals = [];
     }
+
+    function ensureAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === "suspended") audioCtx.resume();
+    }
+
+    function tone(freq, dur, type = "sine", vol = 0.08, slide = 0) {
+      ensureAudio();
+      const t0 = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, t0);
+      if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(80, freq + slide), t0 + dur);
+      gain.gain.setValueAtTime(vol, t0);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + dur + 0.02);
+    }
+
+    function sfxConnect() { tone(520, 0.12, "sine", 0.06, 180); }
+    function sfxDeploy() { tone(880, 0.08, "triangle", 0.09, 400); tone(1320, 0.06, "sine", 0.04); }
+    function sfxMiss() { tone(180, 0.2, "sawtooth", 0.05, -60); }
+    function sfxWrong() { tone(300, 0.15, "square", 0.04, -80); }
+    function sfxEnd(ok) { tone(ok ? 660 : 220, 0.35, "sine", 0.07, ok ? 200 : -40); }
 
     function initThree() {
       const canvas = $("canvas");
-      renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
       renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
       renderer.setSize(innerWidth, innerHeight);
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.05;
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x0a0a0a);
-      scene.fog = new THREE.FogExp2(0x0a0a0a, 0.035);
+      scene.background = new THREE.Color(0x08080c);
+      scene.fog = new THREE.FogExp2(0x08080c, 0.028);
 
-      camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 100);
+      camera = new THREE.PerspectiveCamera(68, innerWidth / innerHeight, 0.1, 80);
       camera.position.set(0, 1.7, 6);
 
       const floor = new THREE.Mesh(
-        new THREE.PlaneGeometry(40, 40),
-        new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.6, roughness: 0.4 })
+        new THREE.PlaneGeometry(44, 44),
+        new THREE.MeshStandardMaterial({ color: 0x0e0e14, metalness: 0.75, roughness: 0.28 })
       );
       floor.rotation.x = -Math.PI / 2;
+      floor.receiveShadow = true;
       scene.add(floor);
 
-      const grid = new THREE.GridHelper(40, 40, 0x6366f1, 0x1a1a2e);
-      grid.position.y = 0.01;
+      const grid = new THREE.GridHelper(44, 44, 0x6366f1, 0x151520);
+      grid.position.y = 0.008;
+      grid.material.opacity = 0.35;
+      grid.material.transparent = true;
       scene.add(grid);
 
-      scene.add(new THREE.AmbientLight(0x404060, 0.4));
-      const key = new THREE.DirectionalLight(0x6366f1, 1.2);
-      key.position.set(4, 8, 2);
-      scene.add(key);
-      const rim = new THREE.PointLight(0x6366f1, 2, 20);
-      rim.position.set(-6, 3, -4);
-      scene.add(rim);
+      // Back wall command center
+      const wall = new THREE.Mesh(
+        new THREE.PlaneGeometry(30, 8),
+        new THREE.MeshStandardMaterial({ color: 0x12121a, metalness: 0.2, roughness: 0.85 })
+      );
+      wall.position.set(0, 4, -12);
+      scene.add(wall);
 
-      // Stack pillars along left wall
+      const strip = new THREE.Mesh(
+        new THREE.PlaneGeometry(18, 0.15),
+        new THREE.MeshBasicMaterial({ color: COLORS.accent })
+      );
+      strip.position.set(0, 6.5, -11.9);
+      scene.add(strip);
+
+      scene.add(new THREE.HemisphereLight(0x6366f1, 0x0a0a0a, 0.35));
+      const key = new THREE.DirectionalLight(0x6366f1, 1.4);
+      key.position.set(5, 10, 4);
+      key.castShadow = true;
+      key.shadow.mapSize.set(1024, 1024);
+      scene.add(key);
+
+      const fill = new THREE.PointLight(0x6366f1, 1.2, 24);
+      fill.position.set(-5, 4, 2);
+      scene.add(fill);
+
       INTEGRATIONS.forEach((name, i) => {
-        const geo = new THREE.BoxGeometry(0.4, 2.2, 0.4);
-        const mat = new THREE.MeshStandardMaterial({ color: 0x262626, emissive: 0x000000, metalness: 0.5, roughness: 0.3 });
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set(-8, 1.1, -4 + i * 1.6);
-        mesh.userData = { integration: name, connected: false };
+        const mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(0.45, 2.4, 0.45),
+          new THREE.MeshStandardMaterial({ color: 0x1a1a24, emissive: 0x000000, metalness: 0.55, roughness: 0.25 })
+        );
+        mesh.position.set(-9, 1.2, -5 + i * 1.7);
+        mesh.castShadow = true;
+        mesh.userData = { integration: name, connected: false, baseY: 1.2 };
         scene.add(mesh);
         stackMeshes.push(mesh);
 
-        const label = new THREE.PointLight(0x6366f1, 0, 3);
-        label.position.copy(mesh.position).add(new THREE.Vector3(0, 1.2, 0));
-        mesh.userData.light = label;
-        scene.add(label);
+        const light = new THREE.PointLight(COLORS.accent, 0, 4);
+        light.position.copy(mesh.position).add(new THREE.Vector3(0, 1.3, 0));
+        mesh.userData.light = light;
+        scene.add(light);
       });
 
       clock = new THREE.Clock();
@@ -210,16 +344,34 @@
         rescued: 0,
         churn: 100,
         gameOver: false,
-        spawnMs: 1800,
+        spawnMs: 2000,
+        spawnAcc: 0,
         yaw: 0,
         pitch: 0,
+        yawVel: 0,
+        pitchVel: 0,
         pos: new THREE.Vector3(0, 1.7, 6),
+        vel: new THREE.Vector3(),
+        bob: 0,
+        kick: 0,
+        fov: 68,
       };
-      orbs.forEach((o) => scene.remove(o.mesh));
+      orbs.forEach(removeOrb);
       orbs = [];
+      pulses.forEach((p) => scene.remove(p.mesh));
+      pulses = [];
+      hoverOrb = null;
+      $("crosshair").className = "crosshair";
     }
 
     function stackPct() { return Math.round((state.connected / INTEGRATIONS.length) * 100); }
+
+    function popPill(id) {
+      const el = $(id);
+      el.classList.remove("pop");
+      void el.offsetWidth;
+      el.classList.add("pop");
+    }
 
     function updateHud() {
       const left = Math.max(0, Math.ceil((GAME_MS - (Date.now() - state.startedAt)) / 1000));
@@ -229,10 +381,23 @@
       $("t-stack").textContent = stackPct() + "%";
       $("t-churn").textContent = Math.round(state.churn) + "%";
       $("churn-fill").style.width = state.churn + "%";
+
+      if (left !== lastHud.timer) {
+        lastHud.timer = left;
+        if (left <= 15) $("pill-timer").classList.add("urgent");
+        else $("pill-timer").classList.remove("urgent");
+      }
+      if (state.arr !== lastHud.arr) { lastHud.arr = state.arr; popPill("pill-arr"); }
+      if (state.signals.size !== lastHud.sig) { lastHud.sig = state.signals.size; popPill("pill-sig"); }
+
       const b = $("banner");
       if (!state.connectDone) {
-        b.textContent = "Connecting stack…";
+        b.textContent = `Connecting stack… ${stackPct()}%`;
         b.classList.add("active");
+      } else if (hoverOrb) {
+        const tag = hoverOrb.status === "at-risk" ? "🔴 at-risk" : hoverOrb.status === "expansion" ? "🟡 expansion" : "🟢 healthy";
+        b.textContent = `${hoverOrb.company} · ${tag} · ${hoverOrb.chipCount} signal${hoverOrb.chipCount > 1 ? "s" : ""}`;
+        b.classList.toggle("active", hoverOrb.status === "at-risk");
       } else {
         b.textContent = "Aim at 🔴 at-risk orbs · Left-click Agent Pulse";
         b.classList.remove("active");
@@ -244,83 +409,131 @@
       if (!mesh || mesh.userData.connected) return;
       mesh.userData.connected = true;
       mesh.material.emissive.setHex(COLORS.accent);
-      mesh.material.emissiveIntensity = 0.6;
-      mesh.userData.light.intensity = 1.5;
+      mesh.material.emissiveIntensity = 0.7;
+      mesh.userData.light.intensity = 2;
+      mesh.userData.pulse = 1;
       state.connected++;
+      sfxConnect();
+      popPill("pill-stack");
       updateHud();
     }
 
     function spawnOrb() {
-      if (state.gameOver) return;
+      if (state.gameOver || orbs.length >= MAX_ORBS) return;
+
       const statusRoll = Math.random();
       let status = "healthy";
-      if (statusRoll < 0.25 + state.connected * 0.02) status = "at-risk";
-      else if (statusRoll < 0.35) status = "expansion";
+      if (statusRoll < 0.28 + state.connected * 0.015) status = "at-risk";
+      else if (statusRoll < 0.42) status = "expansion";
 
-      const chipCount = state.connectDone ? (Math.random() < 0.4 ? 2 : 1) + (Math.random() < 0.2 ? 1 : 0) : 1;
+      const chipCount = state.connectDone
+        ? Math.min(3, 1 + (Math.random() < 0.45 ? 1 : 0) + (Math.random() < 0.22 ? 1 : 0))
+        : 1;
       const color = status === "healthy" ? COLORS.healthy : status === "expansion" ? COLORS.expansion : COLORS.atRisk;
+      const geo = orbGeo[Math.min(chipCount - 1, 2)];
 
-      const geo = new THREE.SphereGeometry(0.35 + chipCount * 0.05, 24, 24);
-      const mat = new THREE.MeshStandardMaterial({
-        color, emissive: color, emissiveIntensity: 0.5,
-        metalness: 0.3, roughness: 0.2, transparent: true, opacity: 0.92,
-      });
-      const mesh = new THREE.Mesh(geo, mat);
+      const mesh = new THREE.Mesh(geo, matFor(color));
+      const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
+        color, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending,
+      }));
+      ring.rotation.x = Math.PI / 2;
+      mesh.add(ring);
+
       const angle = Math.random() * Math.PI * 2;
-      const dist = 3 + Math.random() * 5;
-      mesh.position.set(Math.cos(angle) * dist, 1.2 + Math.random() * 1.5, Math.sin(angle) * dist - 2);
+      const dist = 3.5 + Math.random() * 4.5;
+      const y = 1.3 + Math.random() * 1.4;
+      mesh.position.set(Math.cos(angle) * dist, y, Math.sin(angle) * dist - 2);
+      mesh.scale.setScalar(0.01);
+      mesh.castShadow = true;
       scene.add(mesh);
 
-      const light = new THREE.PointLight(color, 0.8, 4);
+      const light = new THREE.PointLight(color, 0, 5);
       light.position.copy(mesh.position);
       scene.add(light);
 
       const company = COMPANIES[Math.floor(Math.random() * COMPANIES.length)];
-      const arr = 18000 + Math.random() * 40000;
+      const arr = 18000 + Math.random() * 42000;
       const orb = {
-        mesh, light, status, chipCount, company, arr,
-        born: Date.now(), ttl: 3000 + Math.random() * 2000,
+        mesh, ring, light, status, chipCount, company, arr,
+        born: performance.now(), ttl: 3200 + Math.random() * 2200,
         bob: Math.random() * Math.PI * 2,
+        spawnT: 0,
+        baseY: y,
+        timeoutId: null,
       };
       orbs.push(orb);
 
-      timers.push(setTimeout(() => {
+      orb.timeoutId = setTimeout(() => {
         if (orbs.includes(orb)) expireOrb(orb);
-      }, orb.ttl));
+      }, orb.ttl);
+      timeouts.push(orb.timeoutId);
     }
 
-    function showFloater(text, bad) {
+    function showFloater(text, kind) {
       const f = document.createElement("div");
-      f.className = "floater" + (bad ? " bad" : "");
+      f.className = "floater" + (kind ? " " + kind : "");
       f.textContent = text;
-      f.style.left = "50%";
-      f.style.top = "45%";
+      f.style.left = (48 + Math.random() * 4) + "%";
+      f.style.top = (42 + Math.random() * 4) + "%";
       document.body.appendChild(f);
-      setTimeout(() => f.remove(), 1000);
+      setTimeout(() => f.remove(), 1100);
+    }
+
+    function spawnPulse(pos, color) {
+      const mesh = new THREE.Mesh(
+        new THREE.RingGeometry(0.2, 0.5, 32),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8, side: THREE.DoubleSide, blending: THREE.AdditiveBlending })
+      );
+      mesh.position.copy(pos);
+      mesh.rotation.x = -Math.PI / 2;
+      scene.add(mesh);
+      pulses.push({ mesh, life: 0 });
+    }
+
+    function flash() {
+      const el = $("flash");
+      el.classList.add("on");
+      setTimeout(() => el.classList.remove("on"), 60);
     }
 
     function removeOrb(orb) {
+      if (orb.timeoutId) clearTimeout(orb.timeoutId);
       scene.remove(orb.mesh);
       scene.remove(orb.light);
       orbs = orbs.filter((o) => o !== orb);
+      if (hoverOrb === orb) hoverOrb = null;
     }
 
     function deployOrb(orb) {
+      $("crosshair").classList.add("deploy");
+      setTimeout(() => $("crosshair").classList.remove("deploy"), 120);
+      state.kick = 0.06;
+
       if (orb.status === "healthy") {
         state.churn = Math.max(0, state.churn - 5);
-        showFloater("Wrong tag — healthy account", true);
+        showFloater("Wrong tag — healthy account", "bad");
+        sfxWrong();
+        spawnPulse(orb.mesh.position, COLORS.healthy);
         removeOrb(orb);
         updateHud();
         if (state.churn <= 0) endGame(false);
         return;
       }
+
       let mult = orb.chipCount >= 3 ? 2 : orb.chipCount >= 2 ? 1.5 : 1;
-      if (orb.chipCount >= 2 && Math.random() < 0.3) mult = 2.5;
-      const saved = Math.round(orb.arr * mult * (orb.status === "expansion" ? 0.6 : 1));
+      const marketBoost = orb.chipCount >= 2 && Math.random() < 0.28;
+      if (marketBoost) mult = 2.5;
+
+      const saved = Math.round(orb.arr * mult * (orb.status === "expansion" ? 0.65 : 1));
       state.arr += saved;
       if (orb.status === "at-risk") state.rescued++;
       state.signals.add(orb.chipCount);
-      showFloater(`+${fmt(saved)} · Draft ready`);
+
+      const label = marketBoost ? `+${fmt(saved)} · Full Stack draft` : `+${fmt(saved)} · Draft ready`;
+      showFloater(label, marketBoost ? "gold" : "");
+      sfxDeploy();
+      flash();
+      spawnPulse(orb.mesh.position, marketBoost ? COLORS.market : COLORS.accent);
       removeOrb(orb);
       updateHud();
     }
@@ -330,11 +543,29 @@
       if (orb.status === "at-risk") {
         const mult = orb.chipCount >= 2 ? 2 : 1;
         state.churn = Math.max(0, state.churn - 4 * mult);
-        showFloater("Missed at-risk signal!", true);
+        showFloater("Missed at-risk signal!", "bad");
+        sfxMiss();
         if (state.churn <= 0) endGame(false);
       }
       removeOrb(orb);
       updateHud();
+    }
+
+    function updateHover() {
+      if (!pointerLocked || state.gameOver) {
+        hoverOrb = null;
+        $("crosshair").className = "crosshair";
+        return;
+      }
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObjects(orbs.map((o) => o.mesh));
+      hoverOrb = hits.length ? orbs.find((o) => o.mesh === hits[0].object) : null;
+      const ch = $("crosshair");
+      ch.className = "crosshair";
+      if (hoverOrb) {
+        if (hoverOrb.status === "at-risk") ch.classList.add("target");
+        else if (hoverOrb.status === "healthy") ch.classList.add("bad");
+      }
     }
 
     function tryDeploy() {
@@ -351,6 +582,7 @@
       state.gameOver = true;
       clearTimers();
       document.exitPointerLock?.();
+      sfxEnd(ok || state.churn > 0);
       $("end-title").textContent = ok || state.churn > 0 ? "You saved the quarter." : "Churn got there first.";
       const rank = state.arr >= 200000 ? "Chief Renewal Officer" : state.arr >= 80000 ? "CSM Speedrunner" : "Renewal Rookie";
       $("end-rank").textContent = rank;
@@ -361,54 +593,132 @@
     function startGame() {
       clearTimers();
       initState();
+      lastHud = { arr: 0, sig: 0, timer: 90 };
       $("title").classList.add("hidden");
       $("end").classList.add("hidden");
       $("hud").style.visibility = "visible";
+      $("pill-timer").classList.remove("urgent");
       state.startedAt = Date.now();
       updateHud();
+      ensureAudio();
 
       INTEGRATIONS.forEach((_, i) => {
-        timers.push(setTimeout(() => connectStack(i), (CONNECT_MS / INTEGRATIONS.length) * i + 300));
+        timeouts.push(setTimeout(() => connectStack(i), (CONNECT_MS / INTEGRATIONS.length) * i + 400));
       });
-      timers.push(setTimeout(() => { state.connectDone = true; updateHud(); }, CONNECT_MS));
-
-      timers.push(setInterval(updateHud, 200));
-      timers.push(setInterval(() => { if (!state.gameOver) spawnOrb(); }, state.spawnMs));
-      timers.push(setInterval(() => { if (!state.gameOver) state.spawnMs = Math.max(900, state.spawnMs - 30); }, 15000));
-      timers.push(setTimeout(() => endGame(true), GAME_MS));
+      timeouts.push(setTimeout(() => { state.connectDone = true; updateHud(); }, CONNECT_MS));
+      timeouts.push(setTimeout(() => endGame(true), GAME_MS));
 
       canvas.requestPointerLock();
     }
 
+    function updateMovement(dt) {
+      if (!pointerLocked || state.gameOver) return;
+
+      const { dir, right, wish } = reusable;
+      camera.getWorldDirection(dir);
+      dir.y = 0;
+      dir.normalize();
+      right.crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+
+      wish.set(0, 0, 0);
+      if (keys["KeyW"]) wish.add(dir);
+      if (keys["KeyS"]) wish.sub(dir);
+      if (keys["KeyA"]) wish.sub(right);
+      if (keys["KeyD"]) wish.add(right);
+      if (wish.lengthSq() > 0) wish.normalize();
+
+      const targetSpeed = wish.lengthSq() > 0 ? MOVE.maxSpeed : 0;
+      const target = wish.multiplyScalar(targetSpeed);
+      const blend = 1 - Math.exp(-MOVE.accel * dt);
+      state.vel.lerp(target, blend);
+
+      if (wish.lengthSq() === 0) {
+        const damp = Math.exp(-MOVE.friction * dt);
+        state.vel.multiplyScalar(damp);
+      }
+
+      state.pos.addScaledVector(state.vel, dt);
+      state.pos.x = THREE.MathUtils.clamp(state.pos.x, -8, 8);
+      state.pos.z = THREE.MathUtils.clamp(state.pos.z, -3, 11);
+
+      const speed = state.vel.length();
+      state.bob += dt * (4 + speed * 2);
+      const bobY = Math.sin(state.bob) * 0.025 * Math.min(1, speed / 3);
+
+      state.kick *= Math.exp(-12 * dt);
+      camera.fov = state.fov + state.kick * 40;
+      camera.updateProjectionMatrix();
+
+      camera.position.copy(state.pos);
+      camera.position.y += bobY;
+      camera.rotation.order = "YXZ";
+      camera.rotation.y = state.yaw;
+      camera.rotation.x = state.pitch;
+    }
+
+    function updateLook(dt) {
+      state.yaw += state.yawVel;
+      state.pitch += state.pitchVel;
+      state.pitch = THREE.MathUtils.clamp(state.pitch, -0.55, 0.55);
+      const decay = Math.exp(-LOOK.smooth * dt);
+      state.yawVel *= decay;
+      state.pitchVel *= decay;
+    }
+
     function animate() {
       requestAnimationFrame(animate);
-      const dt = clock.getDelta();
+      const dt = Math.min(clock.getDelta(), 0.05);
 
-      if (pointerLocked && !state.gameOver) {
-        const speed = 4 * dt;
-        const dir = new THREE.Vector3();
-        camera.getWorldDirection(dir);
-        dir.y = 0;
-        dir.normalize();
-        const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0));
-        if (keys["KeyW"]) state.pos.addScaledVector(dir, speed);
-        if (keys["KeyS"]) state.pos.addScaledVector(dir, -speed);
-        if (keys["KeyA"]) state.pos.addScaledVector(right, -speed);
-        if (keys["KeyD"]) state.pos.addScaledVector(right, speed);
-        state.pos.x = THREE.MathUtils.clamp(state.pos.x, -7, 7);
-        state.pos.z = THREE.MathUtils.clamp(state.pos.z, -2, 10);
-        camera.position.copy(state.pos);
-        camera.rotation.order = "YXZ";
-        camera.rotation.y = state.yaw;
-        camera.rotation.x = state.pitch;
+      updateLook(dt);
+      updateMovement(dt);
+      updateHover();
+
+      if (!state.gameOver && state.startedAt) {
+        state.spawnAcc += dt * 1000;
+        while (state.spawnAcc >= state.spawnMs) {
+          state.spawnAcc -= state.spawnMs;
+          spawnOrb();
+        }
+        const elapsed = Date.now() - state.startedAt;
+        state.spawnMs = Math.max(850, 2000 - elapsed * 0.012);
+        if (Math.floor(elapsed / 200) !== state._lastHudTick) {
+          state._lastHudTick = Math.floor(elapsed / 200);
+          updateHud();
+        }
       }
 
       const t = clock.elapsedTime;
       orbs.forEach((orb) => {
-        orb.mesh.position.y += Math.sin(t * 2 + orb.bob) * 0.002;
-        orb.mesh.rotation.y += dt * 0.8;
+        orb.spawnT = Math.min(1, orb.spawnT + dt * 5);
+        const ease = 1 - Math.pow(1 - orb.spawnT, 3);
+        orb.mesh.scale.setScalar(ease);
+        orb.mesh.position.y = orb.baseY + Math.sin(t * 2.2 + orb.bob) * 0.12;
+        orb.mesh.rotation.y += dt * 1.1;
+        orb.ring.rotation.z += dt * 0.6;
+        const pulse = 0.55 + Math.sin(t * 4 + orb.bob) * 0.15;
+        orb.ring.material.opacity = pulse;
+        orb.light.intensity = 0.6 + ease * 0.8;
         orb.light.position.copy(orb.mesh.position);
       });
+
+      stackMeshes.forEach((mesh) => {
+        if (mesh.userData.pulse > 0) {
+          mesh.userData.pulse -= dt * 2;
+          const s = 1 + Math.sin(mesh.userData.pulse * 8) * 0.04 * mesh.userData.pulse;
+          mesh.scale.set(1, s, 1);
+        }
+      });
+
+      for (let i = pulses.length - 1; i >= 0; i--) {
+        const p = pulses[i];
+        p.life += dt * 2.5;
+        p.mesh.scale.setScalar(1 + p.life * 3);
+        p.mesh.material.opacity = Math.max(0, 0.8 - p.life);
+        if (p.life >= 1) {
+          scene.remove(p.mesh);
+          pulses.splice(i, 1);
+        }
+      }
 
       renderer.render(scene, camera);
     }
@@ -429,16 +739,19 @@
 
     document.addEventListener("pointerlockchange", () => {
       pointerLocked = document.pointerLockElement === canvas;
+      $("hint").style.opacity = pointerLocked ? "0" : "1";
     });
 
     document.addEventListener("mousemove", (e) => {
       if (!pointerLocked) return;
-      state.yaw -= e.movementX * 0.002;
-      state.pitch -= e.movementY * 0.002;
-      state.pitch = THREE.MathUtils.clamp(state.pitch, -0.6, 0.6);
+      state.yawVel -= e.movementX * LOOK.sens;
+      state.pitchVel -= e.movementY * LOOK.sens;
     });
 
-    document.addEventListener("keydown", (e) => { keys[e.code] = true; });
+    document.addEventListener("keydown", (e) => {
+      keys[e.code] = true;
+      if (["Space", "ArrowUp", "ArrowDown"].includes(e.code)) e.preventDefault();
+    });
     document.addEventListener("keyup", (e) => { keys[e.code] = false; });
 
     window.addEventListener("resize", () => {
