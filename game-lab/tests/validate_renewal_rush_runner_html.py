@@ -9,18 +9,19 @@ from pathlib import Path
 HTML = Path(__file__).resolve().parents[1] / "renewal-rush-runner.html"
 
 REQUIRED = [
-    "Renewal Run",
+    "FPS Runner",
     "three.module.js",
     "switchLane",
-    "punch",
-    "FIGHT COMBO",
+    "shoot",
+    "KILL STREAK",
     "renewal-rush-runner-best",
     "quivly-logo-forest-white.webp",
-    "Subway",
     "CHALLENGE_POOL",
     "HURDLE_GAUNTLETS",
     "spawnGauntlet",
     "challenge-box",
+    "crosshair",
+    "requestPointerLock",
     "GAUNTLET!",
 ]
 

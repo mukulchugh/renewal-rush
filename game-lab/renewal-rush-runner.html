@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Renewal Rush — Runner Fight</title>
+  <title>Renewal Rush — FPS Runner</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
   <style>
     :root {
@@ -12,7 +12,22 @@
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); font-family: Inter, system-ui, sans-serif; }
-    #canvas { display: block; width: 100%; height: 100%; }
+    #canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+    .crosshair {
+      position: fixed; left: 50%; top: 50%; width: 22px; height: 22px;
+      margin: -11px 0 0 -11px; pointer-events: none; z-index: 3;
+    }
+    .crosshair::before, .crosshair::after {
+      content: ""; position: absolute; border-radius: 1px; background: #6366f1cc;
+      transition: background 0.1s, transform 0.1s;
+    }
+    .crosshair::before { left: 10px; top: 4px; width: 2px; height: 14px; }
+    .crosshair::after { top: 10px; left: 4px; height: 2px; width: 14px; }
+    .crosshair.target::before, .crosshair.target::after { background: var(--red); transform: scale(1.12); }
+    .crosshair.bad::before, .crosshair.bad::after { background: var(--green); }
+    .flash { position: fixed; inset: 0; background: #6366f118; pointer-events: none; opacity: 0; z-index: 4; }
+    .flash.on { opacity: 1; transition: opacity 0.05s; }
+    .hint { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); font-size: 0.62rem; color: #555; pointer-events: none; z-index: 2; }
     .hud { position: fixed; inset: 0; pointer-events: none; z-index: 2; padding: 14px 18px; display: flex; flex-direction: column; justify-content: space-between; color: var(--text); }
     .hud-top { display: flex; justify-content: space-between; align-items: flex-start; }
     .hud-top img { height: 22px; }
@@ -54,15 +69,17 @@
 </head>
 <body>
   <canvas id="canvas"></canvas>
+  <div class="flash" id="flash"></div>
   <div class="callout" id="callout"></div>
+  <div class="crosshair" id="crosshair"></div>
   <div class="hud" id="hud" style="visibility:hidden">
     <div class="hud-top">
-      <div><img src="assets/brand/quivly-logo-forest-white.webp" alt="" /><div class="title-sm">Renewal Run</div></div>
+      <div><img src="assets/brand/quivly-logo-forest-white.webp" alt="" /><div class="title-sm">FPS Runner</div></div>
       <div class="stats">
         <div class="pill gold">ARR <strong id="t-arr">$0</strong></div>
         <div class="pill">Dist <strong id="t-dist">0</strong>m</div>
         <div class="pill">Speed <strong id="t-spd">1.0</strong>×</div>
-        <div class="pill">Fight <strong id="t-combo">0</strong>×</div>
+        <div class="pill">Kill <strong id="t-combo">0</strong>×</div>
         <div class="pill">Done <strong id="t-challenges">0</strong></div>
       </div>
     </div>
@@ -71,23 +88,24 @@
       <div class="challenge-label"><span id="challenge-text">Challenge loading…</span><strong id="challenge-progress">0/0</strong></div>
       <div class="challenge-bar"><div class="challenge-fill" id="challenge-fill"></div></div>
     </div>
-    <div class="banner" id="banner">Hurdles ahead — jump · slide · punch · complete challenges</div>
+    <div class="banner" id="banner">Auto-run — strafe lanes · jump hurdles · slide beams · shoot churn</div>
   </div>
   <div class="hurdle-hint" id="hurdle-hint"></div>
+  <p class="hint" id="hint">A/D lanes · Mouse aim · Click shoot · Space jump · S slide</p>
   <a class="back" href="index.html">← Game Lab</a>
 
   <div class="overlay" id="title">
     <div class="modal">
       <img src="assets/brand/quivly-logo-forest-white.webp" alt="" />
-      <h2>Renewal Run</h2>
-      <p>Subway-style run with hurdles, gauntlets, and rotating challenges. Jump bars, slide beams, dodge gaps, punch churn.</p>
+      <h2>FPS Runner</h2>
+      <p>First-person endless run — sprint forward, strafe lanes, jump hurdles, slide beams, and shoot churn drones before they stack.</p>
       <div class="controls">
-        <div><span>← → / A D</span> switch lane</div>
-        <div><span>Space</span> jump</div>
-        <div><span>J / Click</span> punch fight</div>
-        <div><span>↓ / S</span> slide (brief)</div>
+        <div><span>A / D</span> strafe lane</div>
+        <div><span>Mouse</span> aim</div>
+        <div><span>Click</span> shoot Pulse</div>
+        <div><span>Space / S</span> jump / slide</div>
       </div>
-      <button class="btn" id="start">Start run</button>
+      <button class="btn" id="start">Lock aim &amp; run</button>
     </div>
   </div>
   <div class="overlay hidden" id="end">
@@ -108,14 +126,15 @@
     const LANES = [-2.2, 0, 2.2];
     const BEST_KEY = "renewal-rush-runner-best";
     const COLORS = { track: 0x0e0e14, accent: 0x6366f1, churn: 0xf87171, healthy: 0x34d399, gold: 0xfcd34d, obstacle: 0x52525b, hurdle: 0xfbbf24, danger: 0xef4444 };
+    const LOOK = { sens: 0.0016, maxYaw: 0.55, minPitch: -0.35, maxPitch: 0.25 };
     const CHALLENGE_POOL = [
-      { id: "punch5", label: "Punch 5 churn drones", goal: 5, track: "punches", reward: 1800 },
+      { id: "shoot5", label: "Shoot 5 churn drones", goal: 5, track: "punches", reward: 1800 },
       { id: "jump8", label: "Clear 8 hurdles", goal: 8, track: "hurdles", reward: 1500 },
       { id: "slide6", label: "Slide under 6 beams", goal: 6, track: "slides", reward: 1200 },
       { id: "lanes12", label: "Switch lanes 12×", goal: 12, track: "lanes", reward: 1000 },
       { id: "coins10", label: "Collect 10 ARR chips", goal: 10, track: "coins", reward: 2200 },
       { id: "dist250", label: "Sprint 250m", goal: 250, track: "dist", reward: 2800 },
-      { id: "combo6", label: "Hit 6× fight combo", goal: 6, track: "maxCombo", reward: 2000 },
+      { id: "combo6", label: "Hit 6× kill streak", goal: 6, track: "maxCombo", reward: 2000 },
     ];
     const HURDLE_GAUNTLETS = [
       [{ type: "hurdle", lane: 0 }, { type: "low", lane: 1 }, { type: "churn", lane: 2 }],
@@ -124,10 +143,14 @@
       [{ type: "gate", lane: 1 }, { type: "spike", lane: 0 }, { type: "spike", lane: 2 }],
     ];
 
-    let renderer, scene, camera, clock;
+    let renderer, scene, camera, clock, gun;
     let player, playerLane = 1, targetLaneX = 0, laneLerp = 0;
     let trackChunks = [], entities = [], particles = [];
     let state = {}, keys = {}, audioCtx = null;
+    let pointerLocked = false, lookYaw = 0, lookPitch = 0, mouseDX = 0;
+    let raycaster = new THREE.Raycaster();
+    const aimOrigin = new THREE.Vector3();
+    const aimDir = new THREE.Vector3();
 
     function $(id) { return document.getElementById(id); }
     function fmt(n) { return n >= 1000 ? "$" + Math.round(n / 1000) + "K" : "$" + Math.round(n); }
@@ -142,7 +165,7 @@
     }
     function sfxLane() { tone(440, 0.05); }
     function sfxJump() { tone(520, 0.08, "sine", 0.06); }
-    function sfxPunch() { tone(180, 0.06, "sawtooth", 0.07); tone(320, 0.04, "square", 0.04); }
+    function sfxShoot() { tone(220, 0.05, "sawtooth", 0.06); tone(480, 0.04, "square", 0.05); }
     function sfxHit() { tone(880, 0.07, "triangle", 0.06); }
     function sfxCoin() { tone(1200, 0.05, "sine", 0.05); }
     function sfxCrash() { tone(90, 0.25, "sawtooth", 0.08); }
@@ -210,8 +233,37 @@
     }
     function showCombo(n) {
       const el = $("combo-display");
-      el.textContent = n > 1 ? `${n}× FIGHT COMBO` : "";
+      el.textContent = n > 1 ? `${n}× KILL STREAK` : "";
       el.classList.toggle("on", n > 1);
+    }
+
+    function flashMuzzle() {
+      const el = $("flash");
+      el.classList.add("on");
+      setTimeout(() => el.classList.remove("on"), 50);
+    }
+
+    function updateCrosshair() {
+      const ch = $("crosshair");
+      let target = null, bad = false, best = Infinity;
+      camera.getWorldPosition(aimOrigin);
+      camera.getWorldDirection(aimDir);
+      for (const ent of entities) {
+        if (ent.dead) continue;
+        const wp = new THREE.Vector3();
+        ent.mesh.getWorldPosition(wp);
+        if (wp.z > 1.5 || wp.z < -35) continue;
+        const to = wp.sub(aimOrigin);
+        const dist = to.length();
+        if (dist > 28) continue;
+        const dot = to.normalize().dot(aimDir);
+        if (dot < 0.94 || dist >= best) continue;
+        best = dist;
+        target = ent;
+      }
+      if (target?.type === "churn") { ch.classList.add("target"); ch.classList.remove("bad"); }
+      else if (target?.type === "healthy") { ch.classList.add("bad"); ch.classList.remove("target"); }
+      else { ch.classList.remove("target", "bad"); }
     }
 
     function initThree() {
@@ -224,31 +276,32 @@
       scene.background = new THREE.Color(0x08080f);
       scene.fog = new THREE.Fog(0x08080f, 8, 42);
 
-      camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 80);
-      camera.position.set(0, 4.2, 7);
-      camera.lookAt(0, 1.2, -6);
-
-      scene.add(new THREE.HemisphereLight(0x6366f1, 0x0a0a0a, 0.6));
-      const sun = new THREE.DirectionalLight(0xffffff, 0.9);
-      sun.position.set(2, 8, 4); scene.add(sun);
-      const rim = new THREE.PointLight(0x6366f1, 1.2, 20);
-      rim.position.set(0, 3, 2); scene.add(rim);
-
-      // Player agent
-      const body = new THREE.Mesh(
-        new THREE.CapsuleGeometry(0.35, 0.9, 6, 12),
-        new THREE.MeshStandardMaterial({ color: 0x6366f1, emissive: 0x6366f1, emissiveIntensity: 0.25, metalness: 0.4, roughness: 0.3 })
-      );
-      body.position.y = 1.05;
-      const fistL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshStandardMaterial({ color: 0x818cf8 }));
-      fistL.position.set(-0.45, 1.0, -0.2);
-      const fistR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshStandardMaterial({ color: 0x818cf8 }));
-      fistR.position.set(0.45, 1.0, -0.2);
       player = new THREE.Group();
-      player.add(body, fistL, fistR);
-      player.userData = { fistL, fistR, body, jumpY: 0, jumpVel: 0, slideT: 0, punchT: 0 };
       player.position.set(0, 0, 0);
+      player.userData = { jumpY: 0, jumpVel: 0, slideT: 0, eyeH: 1.62 };
       scene.add(player);
+
+      camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.1, 80);
+      camera.position.set(0, 1.62, 0);
+      player.add(camera);
+
+      const gunMat = new THREE.MeshStandardMaterial({ color: 0x6366f1, emissive: 0x6366f1, emissiveIntensity: 0.35, metalness: 0.5, roughness: 0.25 });
+      gun = new THREE.Group();
+      const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, 0.55), gunMat);
+      barrel.position.set(0.12, -0.02, -0.35);
+      const grip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.22, 0.14), gunMat);
+      grip.position.set(0.1, -0.18, -0.08);
+      const sight = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.06), new THREE.MeshStandardMaterial({ color: 0xfcd34d, emissive: 0xfcd34d, emissiveIntensity: 0.8 }));
+      sight.position.set(0.12, 0.06, -0.2);
+      gun.add(barrel, grip, sight);
+      gun.userData = { recoil: 0, bob: 0 };
+      camera.add(gun);
+
+      scene.add(new THREE.HemisphereLight(0x6366f1, 0x0a0a0a, 0.65));
+      const sun = new THREE.DirectionalLight(0xffffff, 0.95);
+      sun.position.set(2, 8, 4); scene.add(sun);
+      const rim = new THREE.PointLight(0x6366f1, 1.4, 24);
+      rim.position.set(0, 2.5, -2); scene.add(rim);
 
       for (let i = 0; i < 8; i++) addTrackChunk(-i * 10);
       clock = new THREE.Clock();
@@ -285,7 +338,7 @@
     function initState() {
       state = {
         running: false, gameOver: false, arr: 0, dist: 0, speed: 1, combo: 0, maxCombo: 0,
-        spawnZ: -25, spawnAcc: 0, punchCooldown: 0, challengesCompleted: 0,
+        spawnZ: -25, spawnAcc: 0, fireCooldown: 0, challengesCompleted: 0,
         challenge: null, challengeDone: false,
         stats: { punches: 0, hurdles: 0, slides: 0, lanes: 0, coins: 0 },
         nextGauntletAt: 80, gauntletIdx: 0, lastDistHint: 0,
@@ -297,7 +350,8 @@
       player.userData.jumpY = 0;
       player.userData.jumpVel = 0;
       player.userData.slideT = 0;
-      player.userData.punchT = 0;
+      lookYaw = 0;
+      lookPitch = 0;
     }
 
     function switchLane(dir) {
@@ -324,34 +378,39 @@
       }
     }
 
-    function punch() {
-      if (state.punchCooldown > 0) return;
-      state.punchCooldown = 0.22;
-      player.userData.punchT = 0.18;
-      sfxPunch();
-      const hitZ = -2.2;
-      let hit = false;
-      entities.forEach((ent) => {
-        if (ent.dead || ent.lane !== playerLane) return;
-        if (Math.abs(ent.mesh.position.z - hitZ) > 1.8) return;
-        if (ent.type === "churn" || ent.type === "coin") {
-          if (ent.type === "churn") {
-            ent.dead = true;
-            state.combo++;
-            state.maxCombo = Math.max(state.maxCombo, state.combo);
-            state.arr += Math.round(400 * state.speed * (1 + state.combo * 0.15));
-            bumpChallenge("punches");
-            if (state.challenge?.track === "maxCombo" && state.maxCombo >= state.challenge.goal) completeChallenge();
-            showCombo(state.combo);
-            showCallout(state.combo >= 5 ? "FIGHT STREAK!" : "PUNCH!");
-            spawnBurst(ent.mesh.position, COLORS.churn);
-            sfxHit();
-          }
-          if (ent.type === "coin") collectCoin(ent);
-          hit = true;
-        }
-      });
-      if (!hit) state.combo = 0;
+    function shoot() {
+      if (state.fireCooldown > 0) return;
+      state.fireCooldown = 0.14;
+      gun.userData.recoil = 0.12;
+      sfxShoot();
+      flashMuzzle();
+      camera.getWorldPosition(aimOrigin);
+      camera.getWorldDirection(aimDir);
+      let best = null, bestDist = Infinity;
+      for (const ent of entities) {
+        if (ent.dead || (ent.type !== "churn" && ent.type !== "coin")) continue;
+        const wp = new THREE.Vector3();
+        ent.mesh.getWorldPosition(wp);
+        if (wp.z > 1.5 || wp.z < -35) continue;
+        const to = wp.clone().sub(aimOrigin);
+        const dist = to.length();
+        if (dist > 28) continue;
+        if (to.normalize().dot(aimDir) < 0.94) continue;
+        if (dist < bestDist) { bestDist = dist; best = ent; }
+      }
+      if (!best) { state.combo = 0; updateHud(); return; }
+      if (best.type === "churn") {
+        best.dead = true;
+        state.combo++;
+        state.maxCombo = Math.max(state.maxCombo, state.combo);
+        state.arr += Math.round(400 * state.speed * (1 + state.combo * 0.15));
+        bumpChallenge("punches");
+        if (state.challenge?.track === "maxCombo" && state.maxCombo >= state.challenge.goal) completeChallenge();
+        showCombo(state.combo);
+        showCallout(state.combo >= 5 ? "KILL STREAK!" : "PULSE HIT!");
+        spawnBurst(best.mesh.position, COLORS.churn);
+        sfxHit();
+      } else if (best.type === "coin") collectCoin(best);
       updateHud();
     }
 
@@ -463,7 +522,7 @@
       });
       state.spawnZ = z - pattern.length * 2.8 - 4;
       showCallout("GAUNTLET!");
-      hintAction("Jump · Slide · Punch!");
+      hintAction("Jump · Slide · Shoot!");
     }
 
     function spawnEntity() {
@@ -512,7 +571,7 @@
 
         if (ent.dead || ent.lane !== playerLane) continue;
 
-        if (ent.type === "churn") continue; // punch only
+        if (ent.type === "churn") continue; // shoot only
 
         if (ent.type === "healthy") {
           state.combo = 0;
@@ -555,6 +614,7 @@
     function crash() {
       state.gameOver = true;
       state.running = false;
+      document.exitPointerLock?.();
       sfxCrash();
       const best = Number(localStorage.getItem(BEST_KEY) || 0);
       const newBest = state.arr > best;
@@ -586,6 +646,7 @@
       showCallout("GO!");
       updateHud();
       if (audioCtx?.state === "suspended") audioCtx.resume();
+      $("canvas").requestPointerLock?.();
     }
 
     function animate() {
@@ -636,7 +697,7 @@
 
         if (state.dist - state.lastDistHint > 45) {
           state.lastDistHint = state.dist;
-          const hints = ["Jump hurdles!", "Slide beams!", "Punch churn!", "Watch moving barriers!"];
+          const hints = ["Jump hurdles!", "Slide beams!", "Shoot churn!", "Watch moving barriers!"];
           hintAction(hints[Math.floor(Math.random() * hints.length)]);
         }
 
@@ -650,26 +711,37 @@
           if (ud.jumpY <= 0) ud.jumpVel = 0;
         }
         if (ud.slideT > 0) ud.slideT -= dt;
-        if (ud.punchT > 0) ud.punchT -= dt;
-        ud.body.position.y = 1.05 + ud.jumpY;
-        ud.body.scale.y = ud.slideT > 0 ? 0.55 : 1;
-        ud.fistR.position.z = ud.punchT > 0 ? -0.7 : -0.2;
-        ud.fistL.position.z = ud.punchT > 0 ? -0.5 : -0.2;
-        player.position.y = 0;
 
-        if (state.punchCooldown > 0) state.punchCooldown -= dt;
+        const slideOff = ud.slideT > 0 ? 0.55 : 0;
+        camera.position.y = ud.eyeH + ud.jumpY - slideOff;
+        lookYaw = THREE.MathUtils.clamp(lookYaw + mouseDX * LOOK.sens, -LOOK.maxYaw, LOOK.maxYaw);
+        mouseDX = 0;
+        lookPitch = THREE.MathUtils.clamp(lookPitch, LOOK.minPitch, LOOK.maxPitch);
+        camera.rotation.order = "YXZ";
+        camera.rotation.y = lookYaw;
+        camera.rotation.x = lookPitch;
+
+        gun.userData.bob += dt * state.speed * 9;
+        const bobY = Math.sin(gun.userData.bob) * 0.012;
+        const bobX = Math.cos(gun.userData.bob * 0.5) * 0.008;
+        if (gun.userData.recoil > 0) {
+          gun.userData.recoil = Math.max(0, gun.userData.recoil - dt * 2.5);
+          gun.position.set(0.1 + bobX, -0.16 + bobY + gun.userData.recoil * 0.15, -0.3 + gun.userData.recoil * 0.4);
+        } else {
+          gun.position.set(0.1 + bobX, -0.16 + bobY, -0.3);
+        }
+
+        if (state.fireCooldown > 0) state.fireCooldown -= dt;
 
         if (keys["ArrowLeft"] || keys["KeyA"]) { keys["ArrowLeft"] = false; keys["KeyA"] = false; switchLane(-1); }
         if (keys["ArrowRight"] || keys["KeyD"]) { keys["ArrowRight"] = false; keys["KeyD"] = false; switchLane(1); }
         if (keys["Space"] || keys["ArrowUp"] || keys["KeyW"]) { keys["Space"] = false; keys["ArrowUp"] = false; keys["KeyW"] = false; jump(); }
         if (keys["ArrowDown"] || keys["KeyS"]) { keys["ArrowDown"] = false; keys["KeyS"] = false; slide(); }
-        if (keys["KeyJ"] || keys["click"]) { keys["KeyJ"] = false; keys["click"] = false; punch(); }
+        if (keys["click"]) { keys["click"] = false; shoot(); }
 
         collide();
+        updateCrosshair();
         updateHud();
-
-        camera.position.x = THREE.MathUtils.lerp(camera.position.x, player.position.x * 0.35, dt * 4);
-        camera.lookAt(player.position.x * 0.2, 1.3, -5);
       }
 
       for (let i = particles.length - 1; i >= 0; i--) {
@@ -687,10 +759,24 @@
     animate();
 
     $("start").onclick = startRun;
-    $("replay").onclick = () => { $("end").classList.add("hidden"); $("title").classList.remove("hidden"); };
-    window.addEventListener("keydown", (e) => { keys[e.code] = true; });
+    $("replay").onclick = () => { document.exitPointerLock?.(); $("end").classList.add("hidden"); $("title").classList.remove("hidden"); };
+    window.addEventListener("keydown", (e) => {
+      keys[e.code] = true;
+      if (e.code === "KeyJ" && state.running) shoot();
+    });
     window.addEventListener("keyup", (e) => { keys[e.code] = false; });
-    $("canvas").addEventListener("pointerdown", () => { if (state.running) keys["click"] = true; });
+    $("canvas").addEventListener("click", () => {
+      if (state.running && !pointerLocked) $("canvas").requestPointerLock?.();
+      else if (state.running) shoot();
+    });
+    document.addEventListener("pointerlockchange", () => {
+      pointerLocked = document.pointerLockElement === $("canvas");
+    });
+    document.addEventListener("mousemove", (e) => {
+      if (!pointerLocked || !state.running) return;
+      mouseDX += e.movementX;
+      lookPitch = THREE.MathUtils.clamp(lookPitch - e.movementY * LOOK.sens, LOOK.minPitch, LOOK.maxPitch);
+    });
     window.addEventListener("resize", () => {
       camera.aspect = innerWidth / innerHeight;
       camera.updateProjectionMatrix();

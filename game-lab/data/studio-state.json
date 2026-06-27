@@ -11,13 +11,13 @@
     "phase": "web-polish",
     "currentLesson": "lesson-03-signal-triage",
     "agentStatus": "ready",
-    "agentMessage": "Web engine research locked: Three.js for ship (see data/web-engine-research.json). Runner + hurdles + challenges live at renewal-rush-runner.html.",
+    "agentMessage": "FPS Runner ship target — renewal-rush-runner.html. First-person auto-run + lane strafe + shoot churn + hurdles + challenges.",
     "mcpConnected": false,
     "mcpUrl": "http://127.0.0.1:8000/mcp",
     "unrealRunning": false
   },
   "liveArtifact": {
-    "title": "Renewal Run — Runner + Fight",
+    "title": "Renewal Rush — FPS Runner",
     "type": "renewal-rush-runner.html",
     "highlight": "game"
   },
