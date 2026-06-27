@@ -11,14 +11,14 @@
     "phase": "web-polish",
     "currentLesson": "lesson-03-signal-triage",
     "agentStatus": "ready",
-    "agentMessage": "Renewal Rush 3D excitement pass — rescue streaks, FULL STACK / MARKET BOOST callouts, critical orbs, rush mode last 30s, personal best score. Play and chase combos.",
+    "agentMessage": "Hero Shooter live — renewal-rush-hero.html. Pick Agent Pulse, Stack Runner, or Signal Sniper. Shoot churn drones, tag at-risk signals, E for ult.",
     "mcpConnected": false,
     "mcpUrl": "http://127.0.0.1:8000/mcp",
     "unrealRunning": false
   },
   "liveArtifact": {
-    "title": "Renewal Rush — web 3D (ship target)",
-    "type": "renewal-rush-3d.html",
+    "title": "Renewal Rush — Hero Shooter",
+    "type": "renewal-rush-hero.html",
     "highlight": "game"
   },
   "nextActions": [

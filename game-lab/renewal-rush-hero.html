@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Renewal Rush — Hero Shooter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --accent: #6366f1; --bg: #0a0a0a; --surface: #171717; --border: #333;
+      --text: #fafafa; --muted: #a3a3a3; --green: #34d399; --red: #f87171; --gold: #fcd34d; --purple: #a78bfa;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); font-family: Inter, system-ui, sans-serif; }
+    #canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    .hud { position: fixed; inset: 0; pointer-events: none; color: var(--text); display: flex; flex-direction: column; justify-content: space-between; padding: 16px 20px; z-index: 2; }
+    .hud-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+    .hud-left img { height: 22px; }
+    .hero-tag { font-size: 0.7rem; font-weight: 600; margin-top: 4px; }
+    .hero-tag span { color: var(--muted); font-weight: 400; }
+    .stats { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+    .pill { font-family: "IBM Plex Mono", monospace; font-size: 0.62rem; padding: 6px 10px; border-radius: 8px; background: #171717cc; border: 1px solid var(--border); backdrop-filter: blur(12px); }
+    .pill strong { color: var(--accent); }
+    .pill.urgent { border-color: var(--red); }
+    .hp-wrap { max-width: 280px; align-self: flex-start; margin-top: 8px; }
+    .hp-label { font-size: 0.6rem; color: var(--muted); margin-bottom: 4px; display: flex; justify-content: space-between; }
+    .hp-bar, .ult-bar { height: 5px; background: #262626; border-radius: 3px; overflow: hidden; margin-bottom: 6px; }
+    .hp-fill { height: 100%; background: linear-gradient(90deg, var(--red), var(--green)); transition: width 0.2s; }
+    .ult-fill { height: 100%; background: var(--accent); transition: width 0.15s; }
+    .crosshair { position: fixed; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; pointer-events: none; z-index: 3; }
+    .crosshair::before, .crosshair::after { content: ""; position: absolute; background: var(--accent); opacity: 0.85; border-radius: 1px; }
+    .crosshair::before { left: 10px; top: 4px; width: 2px; height: 14px; }
+    .crosshair::after { top: 10px; left: 4px; height: 2px; width: 14px; }
+    .crosshair.hit { transform: scale(1.3); }
+    .crosshair.hit::before, .crosshair.hit::after { background: var(--gold); }
+    .banner { text-align: center; font-size: 0.78rem; color: var(--muted); background: #171717aa; border: 1px solid var(--border); border-radius: 10px; padding: 8px 16px; align-self: center; backdrop-filter: blur(12px); }
+    .banner.active { color: var(--accent); border-color: var(--accent); }
+    .hitmark { position: fixed; left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; pointer-events: none; z-index: 4; opacity: 0; }
+    .hitmark.on { animation: hitmark 0.2s ease; }
+    @keyframes hitmark { 0% { opacity: 1; transform: scale(0.5) rotate(45deg); } 100% { opacity: 0; transform: scale(1.4) rotate(45deg); } }
+    .hitmark::before, .hitmark::after { content: ""; position: absolute; background: var(--gold); }
+    .hitmark::before { left: 7px; top: 2px; width: 2px; height: 12px; }
+    .hitmark::after { top: 7px; left: 2px; height: 2px; width: 12px; }
+    .overlay { position: fixed; inset: 0; background: #000d; display: grid; place-items: center; z-index: 10; pointer-events: auto; overflow-y: auto; padding: 20px; }
+    .overlay.hidden { display: none; }
+    .modal { max-width: 520px; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 28px; text-align: center; box-shadow: 0 24px 80px #0008; }
+    .modal.wide { max-width: 720px; text-align: left; }
+    .modal img { height: 28px; margin-bottom: 12px; }
+    .modal h2 { font-size: 1.4rem; margin-bottom: 6px; letter-spacing: -0.03em; }
+    .modal > p { color: var(--muted); font-size: 0.88rem; line-height: 1.5; margin-bottom: 18px; text-align: center; }
+    .hero-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+    @media (max-width: 600px) { .hero-grid { grid-template-columns: 1fr; } }
+    .hero-card {
+      border: 1px solid var(--border); border-radius: 14px; padding: 14px; cursor: pointer;
+      transition: border-color 0.15s, transform 0.15s, background 0.15s; background: #121212;
+    }
+    .hero-card:hover { border-color: #555; transform: translateY(-2px); }
+    .hero-card.selected { border-color: var(--accent); background: #6366f111; box-shadow: 0 0 20px #6366f122; }
+    .hero-card .role { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .hero-card h3 { font-size: 0.95rem; margin: 4px 0 8px; }
+    .hero-card .stat { font-family: "IBM Plex Mono", monospace; font-size: 0.62rem; color: var(--muted); line-height: 1.6; }
+    .hero-card .ult { color: var(--gold); font-weight: 600; margin-top: 6px; font-size: 0.68rem; }
+    .btn { background: var(--accent); color: #fff; border: none; border-radius: 10px; padding: 12px 24px; font-weight: 600; cursor: pointer; font-size: 0.9rem; width: 100%; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .hint { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); font-size: 0.62rem; color: #555; pointer-events: none; z-index: 2; }
+    .callout { position: fixed; left: 50%; top: 34%; transform: translateX(-50%); font-weight: 800; font-size: 1.6rem; color: var(--gold); opacity: 0; pointer-events: none; z-index: 6; text-shadow: 0 4px 24px #000; }
+    .callout.show { animation: co 1.1s ease forwards; }
+    @keyframes co { 0% { opacity: 0; transform: translateX(-50%) scale(0.6); } 15% { opacity: 1; transform: translateX(-50%) scale(1.1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateX(-50%) translateY(-20px); } }
+    a.back { position: fixed; bottom: 12px; left: 12px; font-size: 0.68rem; color: #555; z-index: 5; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div class="hitmark" id="hitmark"></div>
+  <div class="callout" id="callout"></div>
+  <div class="crosshair" id="crosshair"></div>
+  <div class="hud" id="hud" style="visibility:hidden">
+    <div>
+      <div class="hud-top">
+        <div class="hud-left">
+          <img src="assets/brand/quivly-logo-forest-white.webp" alt="" />
+          <div class="hero-tag" id="hero-label">Agent Pulse <span>· CSM</span></div>
+        </div>
+        <div class="stats">
+          <div class="pill timer" id="pill-timer">Renewal <strong id="t-timer">90</strong>s</div>
+          <div class="pill">ARR <strong id="t-arr">$0</strong></div>
+          <div class="pill">Kills <strong id="t-kills">0</strong></div>
+          <div class="pill">Streak <strong id="t-streak">0</strong>×</div>
+        </div>
+      </div>
+      <div class="hp-wrap">
+        <div class="hp-label"><span>Shield</span><span id="t-hp">100</span></div>
+        <div class="hp-bar"><div class="hp-fill" id="hp-fill" style="width:100%"></div></div>
+        <div class="hp-label"><span>Ult · E</span><span id="t-ult">Ready</span></div>
+        <div class="ult-bar"><div class="ult-fill" id="ult-fill" style="width:100%"></div></div>
+      </div>
+    </div>
+    <div class="banner" id="banner">Left-click fire · E ultimate · Shoot churn drones &amp; at-risk signals</div>
+  </div>
+  <p class="hint" id="hint">WASD · Mouse · LMB shoot · E ult</p>
+  <a class="back" href="index.html">← Game Lab</a>
+
+  <div class="overlay" id="title">
+    <div class="modal wide">
+      <div style="text-align:center"><img src="assets/brand/quivly-logo-forest-white.webp" alt="" /><h2>Renewal Rush — Hero Shooter</h2>
+      <p>Pick your Quivly agent. Fight churn drones in the arena. Tag at-risk account signals before renewal day.</p></div>
+      <div class="hero-grid" id="hero-grid"></div>
+      <button class="btn" id="start" disabled>Deploy agent</button>
+    </div>
+  </div>
+  <div class="overlay hidden" id="end">
+    <div class="modal">
+      <img src="assets/brand/quivly-logo-forest-white.webp" alt="" />
+      <h2 id="end-title">Quarter saved.</h2>
+      <p id="end-rank" style="color:var(--gold);font-weight:600"></p>
+      <p id="end-stats" style="font-family:monospace;font-size:0.82rem;color:var(--muted)"></p>
+      <button class="btn" id="replay" style="margin-top:16px">Play again</button>
+    </div>
+  </div>
+
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+
+    const HEROES = [
+      { id: "pulse", name: "Agent Pulse", role: "CSM", color: 0x6366f1, fireRate: 0.11, damage: 12, speed: 5.8, spread: 0.018, pellets: 1, ult: "Nova Pulse", ultCd: 8 },
+      { id: "stack", name: "Stack Runner", role: "RevOps", color: 0x34d399, fireRate: 0.32, damage: 8, speed: 6.4, spread: 0.06, pellets: 4, ult: "Full Stack Burst", ultCd: 10 },
+      { id: "signal", name: "Signal Sniper", role: "AE", color: 0xa78bfa, fireRate: 0.65, damage: 38, speed: 5.0, spread: 0.002, pellets: 1, ult: "Market Beam", ultCd: 12 },
+    ];
+    const COMPANIES = ["Vertex Labs", "CloudNine", "DataForge", "Pulse AI", "Stackline", "Northbeam"];
+    const GAME_MS = 90000;
+    const COLORS = { healthy: 0x34d399, atRisk: 0xf87171, expansion: 0xfbbf24, churn: 0xef4444, accent: 0x6366f1 };
+    const MOVE = { accel: 24, friction: 15, maxSpeed: 5.8 };
+    const LOOK = { sens: 0.0018, smooth: 14 };
+
+    let renderer, scene, camera, clock, hero, selectedHero = null;
+    let orbs = [], drones = [], bullets = [], tracers = [];
+    let state = {}, keys = {}, pointerLocked = false;
+    let raycaster = new THREE.Raycaster();
+    let mouse = new THREE.Vector2(0, 0);
+    let timeouts = [], audioCtx = null;
+    let lastFire = 0, ultReadyAt = 0, beamActive = 0;
+
+    const bulletGeo = new THREE.SphereGeometry(0.06, 8, 8);
+    const droneGeo = new THREE.OctahedronGeometry(0.45, 0);
+    const orbGeo = new THREE.SphereGeometry(0.38, 24, 24);
+
+    function $(id) { return document.getElementById(id); }
+    function fmt(n) { return n >= 1000 ? "$" + Math.round(n / 1000) + "K" : "$" + Math.round(n); }
+
+    function ensureAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === "suspended") audioCtx.resume();
+    }
+    function tone(f, d, t = "square", v = 0.06, slide = 0) {
+      ensureAudio();
+      const t0 = audioCtx.currentTime, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = t; o.frequency.setValueAtTime(f, t0);
+      if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(60, f + slide), t0 + d);
+      g.gain.setValueAtTime(v, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + d);
+      o.connect(g).connect(audioCtx.destination); o.start(t0); o.stop(t0 + d + 0.02);
+    }
+    function sfxFire() { tone(600 + Math.random() * 80, 0.05, "square", 0.04); }
+    function sfxHit() { tone(900, 0.06, "triangle", 0.05, 200); }
+    function sfxUlt() { tone(220, 0.3, "sawtooth", 0.07, 400); }
+    function sfxHurt() { tone(120, 0.15, "sawtooth", 0.06, -40); }
+
+    function showCallout(t) {
+      const el = $("callout"); el.textContent = t; el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
+    }
+    function hitmark() {
+      const h = $("hitmark"); h.classList.remove("on"); void h.offsetWidth; h.classList.add("on");
+      $("crosshair").classList.add("hit"); setTimeout(() => $("crosshair").classList.remove("hit"), 120);
+    }
+
+    function buildHeroGrid() {
+      const grid = $("hero-grid");
+      grid.innerHTML = "";
+      HEROES.forEach((h) => {
+        const card = document.createElement("div");
+        card.className = "hero-card" + (selectedHero?.id === h.id ? " selected" : "");
+        card.innerHTML = `<div class="role">${h.role}</div><h3>${h.name}</h3>
+          <div class="stat">Fire ${h.fireRate < 0.2 ? "Rapid" : h.fireRate < 0.4 ? "Burst" : "Charged"}<br>DMG ${h.damage}${h.pellets > 1 ? ` ×${h.pellets}` : ""}<br>Speed ${h.speed}</div>
+          <div class="ult">Ult: ${h.ult}</div>`;
+        card.onclick = () => { selectedHero = h; buildHeroGrid(); $("start").disabled = false; };
+        grid.appendChild(card);
+      });
+    }
+
+    function initThree() {
+      const canvas = $("canvas");
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      renderer.setSize(innerWidth, innerHeight);
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x08080c);
+      scene.fog = new THREE.FogExp2(0x08080c, 0.03);
+
+      camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.1, 80);
+      camera.position.set(0, 1.7, 5);
+
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshStandardMaterial({ color: 0x0e0e14, metalness: 0.8, roughness: 0.25 }));
+      floor.rotation.x = -Math.PI / 2; scene.add(floor);
+      const grid = new THREE.GridHelper(40, 40, 0x6366f1, 0x151520);
+      grid.position.y = 0.01; grid.material.opacity = 0.3; grid.material.transparent = true; scene.add(grid);
+
+      scene.add(new THREE.AmbientLight(0x404060, 0.5));
+      const key = new THREE.DirectionalLight(0x6366f1, 1.3);
+      key.position.set(4, 8, 3); scene.add(key);
+      const rim = new THREE.PointLight(0x6366f1, 1.5, 20);
+      rim.position.set(-4, 3, -2); scene.add(rim);
+
+      clock = new THREE.Clock();
+    }
+
+    function initState() {
+      hero = selectedHero || HEROES[0];
+      state = {
+        startedAt: 0, gameOver: false, arr: 0, kills: 0, streak: 0, rescued: 0,
+        hp: 100, maxHp: 100, yaw: 0, pitch: 0, yawVel: 0, pitchVel: 0,
+        pos: new THREE.Vector3(0, 1.7, 5), vel: new THREE.Vector3(), kick: 0,
+        spawnAcc: 0, spawnMs: 2200, droneSpawn: 0, fov: 72,
+      };
+      orbs.forEach((o) => scene.remove(o.mesh)); orbs = [];
+      drones.forEach((d) => scene.remove(d.mesh)); drones = [];
+      bullets.forEach((b) => scene.remove(b.mesh)); bullets = [];
+      tracers.forEach((t) => scene.remove(t.line)); tracers = [];
+      ultReadyAt = 0; beamActive = 0; lastFire = 0;
+    }
+
+    function updateHud() {
+      const left = Math.max(0, Math.ceil((GAME_MS - (Date.now() - state.startedAt)) / 1000));
+      $("t-timer").textContent = left;
+      $("t-arr").textContent = fmt(state.arr);
+      $("t-kills").textContent = state.kills;
+      $("t-streak").textContent = state.streak;
+      $("t-hp").textContent = Math.round(state.hp);
+      $("hp-fill").style.width = state.hp + "%";
+      $("pill-timer").classList.toggle("urgent", left <= 15);
+      const ultLeft = Math.max(0, ultReadyAt - performance.now());
+      const ultPct = ultLeft > 0 ? 1 - ultLeft / (hero.ultCd * 1000) : 1;
+      $("ult-fill").style.width = (ultPct * 100) + "%";
+      $("t-ult").textContent = ultLeft > 0 ? Math.ceil(ultLeft / 1000) + "s" : beamActive > 0 ? "BEAM!" : "Ready";
+      $("hero-label").innerHTML = `${hero.name} <span>· ${hero.role}</span>`;
+    }
+
+    function removeOrb(orb) {
+      if (orb.ttl) clearTimeout(orb.ttl);
+      scene.remove(orb.mesh);
+      orbs = orbs.filter((x) => x !== orb);
+    }
+
+    function spawnOrb() {
+      if (state.gameOver || orbs.length >= 6) return;
+      const status = Math.random() < 0.55 ? "atRisk" : Math.random() < 0.5 ? "expansion" : "healthy";
+      const color = COLORS[status];
+      const mesh = new THREE.Mesh(orbGeo, new THREE.MeshStandardMaterial({
+        color, emissive: color, emissiveIntensity: 0.6, metalness: 0.3, roughness: 0.2, transparent: true, opacity: 0.9,
+      }));
+      const a = Math.random() * Math.PI * 2, d = 4 + Math.random() * 5;
+      mesh.position.set(Math.cos(a) * d, 1.2 + Math.random(), Math.sin(a) * d - 1);
+      mesh.scale.setScalar(0.01);
+      scene.add(mesh);
+      const orb = {
+        mesh, status, company: COMPANIES[Math.floor(Math.random() * COMPANIES.length)],
+        arr: 20000 + Math.random() * 35000, hp: status === "atRisk" ? 30 : 50, spawnT: 0, ttl: null,
+      };
+      orb.ttl = setTimeout(() => removeOrb(orb), 4000 + Math.random() * 2000);
+      orb.remove = () => removeOrb(orb);
+      orbs.push(orb);
+    }
+
+    function spawnDrone() {
+      if (state.gameOver || drones.length >= 10) return;
+      const mesh = new THREE.Mesh(droneGeo, new THREE.MeshStandardMaterial({
+        color: COLORS.churn, emissive: COLORS.churn, emissiveIntensity: 0.7, flatShading: true,
+      }));
+      const a = Math.random() * Math.PI * 2;
+      mesh.position.set(Math.cos(a) * 14, 1.2, Math.sin(a) * 14 - 2);
+      scene.add(mesh);
+      drones.push({ mesh, hp: 25 + Math.random() * 15, speed: 1.8 + Math.random() * 1.2, phase: Math.random() * 6 });
+    }
+
+    function addTracer(from, to, color) {
+      const geo = new THREE.BufferGeometry().setFromPoints([from.clone(), to.clone()]);
+      const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.7 }));
+      scene.add(line);
+      tracers.push({ line, life: 0 });
+    }
+
+    function fire() {
+      if (state.gameOver || !pointerLocked) return;
+      const now = performance.now();
+      if (now - lastFire < hero.fireRate * 1000) return;
+      lastFire = now;
+      sfxFire();
+      state.kick = 0.04;
+
+      const dir = new THREE.Vector3();
+      camera.getWorldDirection(dir);
+      const origin = camera.position.clone();
+
+      for (let p = 0; p < hero.pellets; p++) {
+        const spread = new THREE.Vector3(
+          (Math.random() - 0.5) * hero.spread,
+          (Math.random() - 0.5) * hero.spread * 0.5,
+          0
+        );
+        const d = dir.clone().add(spread).normalize();
+        const mesh = new THREE.Mesh(bulletGeo, new THREE.MeshBasicMaterial({ color: hero.color }));
+        mesh.position.copy(origin).add(d.clone().multiplyScalar(0.5));
+        scene.add(mesh);
+        const end = origin.clone().add(d.clone().multiplyScalar(8));
+        addTracer(origin, end, hero.color);
+        bullets.push({ mesh, vel: d.multiplyScalar(55), life: 1.2, damage: hero.damage });
+      }
+    }
+
+    function damageDrone(d, dmg) {
+      d.hp -= dmg;
+      hitmark(); sfxHit();
+      if (d.hp <= 0) {
+        scene.remove(d.mesh);
+        drones = drones.filter((x) => x !== d);
+        state.kills++;
+        state.streak++;
+        state.arr += 800 + state.streak * 200;
+        if (state.streak % 5 === 0) showCallout(`${state.streak} KILL STREAK!`);
+        updateHud();
+      }
+    }
+
+    function tagOrb(orb) {
+      if (orb.status === "healthy") {
+        state.hp = Math.max(0, state.hp - 12);
+        state.streak = 0;
+        sfxHurt();
+        orb.remove();
+        if (state.hp <= 0) endGame(false);
+        updateHud();
+        return;
+      }
+      const mult = orb.status === "atRisk" ? 1 : 0.6;
+      const saved = Math.round(orb.arr * mult * (1 + state.streak * 0.05));
+      state.arr += saved;
+      if (orb.status === "atRisk") state.rescued++;
+      state.streak++;
+      hitmark(); sfxHit();
+      showCallout(orb.status === "atRisk" ? `+${fmt(saved)} SAVED` : `+${fmt(saved)}`);
+      orb.remove();
+      updateHud();
+    }
+
+    function castUlt() {
+      if (state.gameOver || performance.now() < ultReadyAt) return;
+      ultReadyAt = performance.now() + hero.ultCd * 1000;
+      sfxUlt();
+      showCallout(hero.ult.toUpperCase() + "!");
+
+      if (hero.id === "pulse") {
+        drones.slice().forEach((d) => {
+          if (d.mesh.position.distanceTo(state.pos) < 10) damageDrone(d, 999);
+        });
+        orbs.filter((o) => o.status === "atRisk").forEach((o) => tagOrb(o));
+      } else if (hero.id === "stack") {
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2;
+          const d = new THREE.Vector3(Math.cos(a), 0.05, Math.sin(a));
+          const mesh = new THREE.Mesh(bulletGeo, new THREE.MeshBasicMaterial({ color: hero.color }));
+          mesh.position.copy(state.pos);
+          scene.add(mesh);
+          bullets.push({ mesh, vel: d.multiplyScalar(40), life: 1.5, damage: hero.damage * 1.5 });
+        }
+      } else {
+        beamActive = performance.now() + 2000;
+      }
+      updateHud();
+    }
+
+    function updateBullets(dt) {
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        b.mesh.position.addScaledVector(b.vel, dt);
+        b.life -= dt;
+
+        let hit = false;
+        for (const d of drones) {
+          if (b.mesh.position.distanceTo(d.mesh.position) < 0.7) {
+            damageDrone(d, b.damage);
+            hit = true; break;
+          }
+        }
+        if (!hit) {
+          for (const o of orbs) {
+            if (b.mesh.position.distanceTo(o.mesh.position) < 0.55) {
+              o.hp -= b.damage;
+              if (o.hp <= 0) tagOrb(o);
+              else hitmark();
+              hit = true; break;
+            }
+          }
+        }
+        if (hit || b.life <= 0) { scene.remove(b.mesh); bullets.splice(i, 1); }
+      }
+    }
+
+    function updateDrones(dt) {
+      const player = state.pos;
+      drones.forEach((d) => {
+        const to = player.clone().sub(d.mesh.position);
+        to.y = 0;
+        const dist = to.length();
+        if (dist > 0.5) {
+          to.normalize();
+          d.mesh.position.addScaledVector(to, d.speed * dt);
+          d.mesh.rotation.y += dt * 3;
+          d.mesh.position.y = 1.1 + Math.sin(clock.elapsedTime * 4 + d.phase) * 0.1;
+        }
+        if (dist < 1.4) {
+          state.hp = Math.max(0, state.hp - 18 * dt);
+          state.streak = 0;
+          sfxHurt();
+          if (state.hp <= 0) endGame(false);
+        }
+      });
+    }
+
+    function endGame(won) {
+      if (state.gameOver) return;
+      state.gameOver = true;
+      timeouts.forEach(clearTimeout); timeouts = [];
+      document.exitPointerLock?.();
+      $("end-title").textContent = won && state.hp > 0 ? "You saved the quarter." : "Churn won this round.";
+      const rank = state.arr >= 180000 ? "Hero of Renewal" : state.arr >= 70000 ? "Arena Ace" : state.kills >= 15 ? "Churn Hunter" : "Field Agent";
+      $("end-rank").textContent = rank;
+      $("end-stats").textContent = `${fmt(state.arr)} · ${state.kills} drone kills · ${state.rescued} rescued · ${state.streak} streak`;
+      $("end").classList.remove("hidden");
+    }
+
+    function startGame() {
+      if (!selectedHero) return;
+      initState();
+      $("title").classList.add("hidden");
+      $("end").classList.add("hidden");
+      $("hud").style.visibility = "visible";
+      state.startedAt = Date.now();
+      updateHud();
+      ensureAudio();
+      timeouts.push(setTimeout(() => endGame(true), GAME_MS));
+      timeouts.push(setTimeout(() => showCallout("FIGHT!"), 400));
+      canvas.requestPointerLock();
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+      const t = clock.elapsedTime;
+
+      if (pointerLocked && !state.gameOver) {
+        state.yaw += state.yawVel; state.pitch += state.pitchVel;
+        state.pitch = THREE.MathUtils.clamp(state.pitch, -0.55, 0.55);
+        state.yawVel *= Math.exp(-LOOK.smooth * dt);
+        state.pitchVel *= Math.exp(-LOOK.smooth * dt);
+
+        const dir = new THREE.Vector3(), right = new THREE.Vector3(), wish = new THREE.Vector3();
+        camera.getWorldDirection(dir); dir.y = 0; dir.normalize();
+        right.crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+        if (keys["KeyW"]) wish.add(dir); if (keys["KeyS"]) wish.sub(dir);
+        if (keys["KeyA"]) wish.sub(right); if (keys["KeyD"]) wish.add(right);
+        if (wish.lengthSq() > 0) wish.normalize();
+        const spd = hero.speed;
+        state.vel.lerp(wish.multiplyScalar(wish.lengthSq() > 0 ? spd : 0), 1 - Math.exp(-MOVE.accel * dt));
+        if (wish.lengthSq() === 0) state.vel.multiplyScalar(Math.exp(-MOVE.friction * dt));
+        state.pos.addScaledVector(state.vel, dt);
+        state.pos.x = THREE.MathUtils.clamp(state.pos.x, -9, 9);
+        state.pos.z = THREE.MathUtils.clamp(state.pos.z, -4, 12);
+
+        state.kick *= Math.exp(-14 * dt);
+        camera.fov = state.fov + state.kick * 35;
+        camera.updateProjectionMatrix();
+        camera.position.copy(state.pos);
+        camera.rotation.order = "YXZ";
+        camera.rotation.y = state.yaw;
+        camera.rotation.x = state.pitch;
+
+        if (keys["clickHeld"]) fire();
+
+        if (beamActive > performance.now()) {
+          raycaster.setFromCamera(mouse, camera);
+          drones.slice().forEach((d) => {
+            if (raycaster.ray.distanceToPoint(d.mesh.position) < 1.2) damageDrone(d, 80 * dt);
+          });
+          orbs.filter((o) => o.status === "atRisk").forEach((o) => {
+            if (raycaster.ray.distanceToPoint(o.mesh.position) < 1) { o.hp -= 100 * dt; if (o.hp <= 0) tagOrb(o); }
+          });
+        }
+      }
+
+      if (!state.gameOver && state.startedAt) {
+        state.spawnAcc += dt * 1000;
+        const elapsed = Date.now() - state.startedAt;
+        state.spawnMs = Math.max(900, 2200 - elapsed * 0.01);
+        while (state.spawnAcc >= state.spawnMs) { state.spawnAcc -= state.spawnMs; spawnOrb(); }
+        state.droneSpawn += dt;
+        if (state.droneSpawn > Math.max(0.8, 2.2 - elapsed * 0.000015)) {
+          state.droneSpawn = 0; spawnDrone();
+        }
+        if (Math.floor(elapsed / 250) !== state._ht) { state._ht = Math.floor(elapsed / 250); updateHud(); }
+      }
+
+      orbs.forEach((o) => {
+        o.spawnT = Math.min(1, o.spawnT + dt * 4);
+        o.mesh.scale.setScalar(1 - Math.pow(1 - o.spawnT, 3));
+        o.mesh.position.y += Math.sin(t * 2 + o.mesh.id) * 0.001;
+        o.mesh.rotation.y += dt;
+      });
+
+      updateBullets(dt);
+      updateDrones(dt);
+
+      for (let i = tracers.length - 1; i >= 0; i--) {
+        tracers[i].life += dt * 4;
+        tracers[i].line.material.opacity = Math.max(0, 0.7 - tracers[i].life);
+        if (tracers[i].life >= 1) { scene.remove(tracers[i].line); tracers.splice(i, 1); }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    const canvas = $("canvas");
+    buildHeroGrid();
+    initThree();
+    animate();
+
+    $("start").onclick = startGame;
+    $("replay").onclick = () => { $("end").classList.add("hidden"); $("title").classList.remove("hidden"); };
+
+    canvas.addEventListener("click", () => {
+      if (state.gameOver) return;
+      if (!$("title").classList.contains("hidden") || !$("end").classList.contains("hidden")) return;
+      if (!pointerLocked) canvas.requestPointerLock();
+      else fire();
+    });
+    canvas.addEventListener("mousedown", (e) => { if (e.button === 0) keys["clickHeld"] = true; });
+    canvas.addEventListener("mouseup", () => { keys["clickHeld"] = false; });
+    document.addEventListener("pointerlockchange", () => {
+      pointerLocked = document.pointerLockElement === canvas;
+      $("hint").style.opacity = pointerLocked ? "0" : "1";
+    });
+    document.addEventListener("mousemove", (e) => {
+      if (!pointerLocked) return;
+      state.yawVel -= e.movementX * LOOK.sens;
+      state.pitchVel -= e.movementY * LOOK.sens;
+    });
+    document.addEventListener("keydown", (e) => { keys[e.code] = true; if (e.code === "KeyE") castUlt(); });
+    document.addEventListener("keyup", (e) => { keys[e.code] = false; });
+    window.addEventListener("resize", () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+  </script>
+</body>
+</html>
