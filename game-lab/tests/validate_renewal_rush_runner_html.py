@@ -29,6 +29,9 @@ REQUIRED = [
     "spawnBossWave",
     "multiplier",
     "ZONES",
+    "ZONE_VIBES",
+    "CHUNK_PALETTE",
+    "toneMappingExposure",
 ]
 
 

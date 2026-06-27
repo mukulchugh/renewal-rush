@@ -11,7 +11,7 @@
       --text: #fafafa; --muted: #a3a3a3; --gold: #fcd34d; --red: #f87171; --green: #34d399;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); font-family: Inter, system-ui, sans-serif; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: radial-gradient(ellipse at 50% 0%, #312e81 0%, #0a0a0a 55%); font-family: Inter, system-ui, sans-serif; }
     #canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
     .crosshair {
       position: fixed; left: 50%; top: 50%; width: 22px; height: 22px;
@@ -166,7 +166,17 @@
 
     const LANES = [-2.2, 0, 2.2];
     const BEST_KEY = "renewal-rush-runner-best";
-    const COLORS = { track: 0x0e0e14, accent: 0x6366f1, churn: 0xf87171, healthy: 0x34d399, gold: 0xfcd34d, obstacle: 0x52525b, hurdle: 0xfbbf24, danger: 0xef4444 };
+    const COLORS = {
+      track: 0x1e1b4b, accent: 0x818cf8, churn: 0xff6b8a, healthy: 0x34d399, gold: 0xffe066,
+      obstacle: 0xa78bfa, hurdle: 0xfbbf24, danger: 0xff4d6d, cyan: 0x22d3ee, magenta: 0xf472b6, lime: 0xa3e635,
+    };
+    const CHUNK_PALETTE = [0x6366f1, 0xec4899, 0x22d3ee, 0xfbbf24, 0xa3e635, 0xf97316];
+    const ZONE_VIBES = {
+      Connect: { fog: 0x312e81, bg: 0x1e1b4b, rim: 0x818cf8, fill: 0xc084fc },
+      Surface: { fog: 0x4c1d95, bg: 0x3b0764, rim: 0xf472b6, fill: 0xe879f9 },
+      Deploy: { fog: 0x5b21b6, bg: 0x4a044e, rim: 0xfb7185, fill: 0xfda4af },
+      "Renewal Rush": { fog: 0x0f766e, bg: 0x134e4a, rim: 0x2dd4bf, fill: 0x5eead4 },
+    };
     const FOV = 98;
     const LOOK = { sens: 0.0016, maxYaw: 0.72, minPitch: -0.4, maxPitch: 0.3 };
     const CHALLENGE_POOL = [
@@ -200,7 +210,7 @@
     ];
     const POWER_LABELS = { overcharge: "Overdrive", magnet: "Magnet", slowmo: "Focus" };
 
-    let renderer, scene, camera, clock, gun;
+    let renderer, scene, camera, clock, gun, envRim, envFill, envSun;
     let player, playerLane = 1, targetLaneX = 0, laneLerp = 0;
     let trackChunks = [], entities = [], particles = [], laserBolts = [];
     const laserUp = new THREE.Vector3(0, 1, 0);
@@ -283,6 +293,14 @@
       updatePowerHud();
     }
 
+    function applyZoneVibe(name) {
+      const vibe = ZONE_VIBES[name] || ZONE_VIBES.Connect;
+      scene.background.setHex(vibe.bg);
+      scene.fog.color.setHex(vibe.fog);
+      if (envRim) { envRim.color.setHex(vibe.rim); envRim.intensity = 2.2; }
+      if (envFill) envFill.color.setHex(vibe.fill);
+    }
+
     function checkZones() {
       let z = ZONES[0];
       for (const zone of ZONES) {
@@ -291,6 +309,7 @@
       if (z.name !== state.zoneName) {
         state.zoneName = z.name;
         state.zoneSpeed = z.speed;
+        applyZoneVibe(z.name);
         showCallout(z.name.toUpperCase() + "!");
         hintAction(`Zone: ${z.name}`);
         $("t-zone").textContent = z.name;
@@ -437,10 +456,12 @@
       renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
       renderer.setSize(innerWidth, innerHeight);
       renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.38;
 
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x08080f);
-      scene.fog = new THREE.Fog(0x08080f, 8, 42);
+      scene.background = new THREE.Color(ZONE_VIBES.Connect.bg);
+      scene.fog = new THREE.FogExp2(ZONE_VIBES.Connect.fog, 0.038);
 
       player = new THREE.Group();
       player.position.set(0, 0, 0);
@@ -480,40 +501,115 @@
       gun.userData = { recoil: 0, bob: 0, muzzle, muzzleFlash: 0 };
       camera.add(gun);
 
-      scene.add(new THREE.HemisphereLight(0x6366f1, 0x0a0a0a, 0.65));
-      const sun = new THREE.DirectionalLight(0xffffff, 0.95);
-      sun.position.set(2, 8, 4); scene.add(sun);
-      const rim = new THREE.PointLight(0x6366f1, 1.4, 24);
-      rim.position.set(0, 2.5, -2); scene.add(rim);
+      scene.add(new THREE.AmbientLight(0x6d28d9, 0.45));
+      scene.add(new THREE.HemisphereLight(0xc084fc, 0x1e1b4b, 1.1));
+      envSun = new THREE.DirectionalLight(0xfff1f2, 1.15);
+      envSun.position.set(2, 10, 3);
+      scene.add(envSun);
+      envFill = new THREE.DirectionalLight(ZONE_VIBES.Connect.fill, 0.55);
+      envFill.position.set(-3, 4, -6);
+      scene.add(envFill);
+      envRim = new THREE.PointLight(ZONE_VIBES.Connect.rim, 2.2, 38);
+      envRim.position.set(0, 3.2, -4);
+      scene.add(envRim);
+      [[-3.5, 0xec4899], [3.5, 0x22d3ee]].forEach(([x, c]) => {
+        const pl = new THREE.PointLight(c, 1.6, 14);
+        pl.position.set(x, 1.8, -3);
+        scene.add(pl);
+      });
 
-      for (let i = 0; i < 8; i++) addTrackChunk(-i * 10);
+      for (let i = 0; i < 10; i++) addTrackChunk(-i * 10);
       clock = new THREE.Clock();
     }
 
     function addTrackChunk(zBase) {
       const group = new THREE.Group();
       group.position.z = zBase;
+      const hue = CHUNK_PALETTE[Math.abs(Math.floor(zBase / 10)) % CHUNK_PALETTE.length];
+      const alt = CHUNK_PALETTE[(Math.abs(Math.floor(zBase / 10)) + 2) % CHUNK_PALETTE.length];
+      group.userData = { hue, pulse: Math.random() * Math.PI * 2 };
+
       const floor = new THREE.Mesh(
-        new THREE.PlaneGeometry(8, 10),
-        new THREE.MeshStandardMaterial({ color: COLORS.track, metalness: 0.6, roughness: 0.35 })
+        new THREE.PlaneGeometry(9.2, 10),
+        new THREE.MeshStandardMaterial({
+          color: 0x1e1b4b, emissive: hue, emissiveIntensity: 0.22,
+          metalness: 0.55, roughness: 0.22,
+        })
       );
       floor.rotation.x = -Math.PI / 2;
       group.add(floor);
-      LANES.forEach((lx) => {
+
+      for (let gz = -4; gz <= 4; gz += 2) {
+        const grid = new THREE.Mesh(
+          new THREE.PlaneGeometry(9, 0.06),
+          new THREE.MeshBasicMaterial({ color: hue, transparent: true, opacity: 0.55 })
+        );
+        grid.rotation.x = -Math.PI / 2;
+        grid.position.set(0, 0.02, gz);
+        group.add(grid);
+      }
+      [-4.2, 4.2].forEach((sx, i) => {
+        const wall = new THREE.Mesh(
+          new THREE.BoxGeometry(0.35, 3.2, 10),
+          new THREE.MeshStandardMaterial({
+            color: 0x0f172a, emissive: i === 0 ? COLORS.magenta : COLORS.cyan,
+            emissiveIntensity: 0.85, metalness: 0.4, roughness: 0.15, transparent: true, opacity: 0.92,
+          })
+        );
+        wall.position.set(sx, 1.6, 0);
+        group.add(wall);
+        const strip = new THREE.Mesh(
+          new THREE.BoxGeometry(0.08, 0.12, 10),
+          new THREE.MeshBasicMaterial({ color: i === 0 ? COLORS.magenta : COLORS.cyan })
+        );
+        strip.position.set(sx * 0.92, 0.4, 0);
+        group.add(strip);
+      });
+
+      const laneColors = [COLORS.magenta, COLORS.accent, COLORS.cyan];
+      LANES.forEach((lx, i) => {
         const line = new THREE.Mesh(
-          new THREE.PlaneGeometry(0.04, 10),
-          new THREE.MeshBasicMaterial({ color: COLORS.accent, transparent: true, opacity: 0.35 })
+          new THREE.PlaneGeometry(0.07, 10),
+          new THREE.MeshBasicMaterial({ color: laneColors[i], transparent: true, opacity: 0.9 })
         );
         line.rotation.x = -Math.PI / 2;
-        line.position.set(lx, 0.01, 0);
+        line.position.set(lx, 0.03, 0);
         group.add(line);
       });
-      const rail = new THREE.Mesh(
-        new THREE.BoxGeometry(8.4, 0.3, 0.3),
-        new THREE.MeshStandardMaterial({ color: 0x1a1a24 })
+
+      for (let i = 0; i < 5; i++) {
+        const arch = new THREE.Mesh(
+          new THREE.TorusGeometry(0.22, 0.04, 6, 20, Math.PI),
+          new THREE.MeshStandardMaterial({ color: alt, emissive: alt, emissiveIntensity: 1.4, metalness: 0.3, roughness: 0.1 })
+        );
+        arch.rotation.x = Math.PI / 2;
+        arch.rotation.z = Math.PI / 2;
+        arch.position.set((i % 2 === 0 ? -3.2 : 3.2), 2.4, -4 + i * 2);
+        group.add(arch);
+      }
+
+      for (let o = 0; o < 3; o++) {
+        const orb = new THREE.Mesh(
+          new THREE.SphereGeometry(0.12 + Math.random() * 0.08, 10, 10),
+          new THREE.MeshStandardMaterial({
+            color: CHUNK_PALETTE[(o + Math.abs(zBase)) % CHUNK_PALETTE.length],
+            emissive: CHUNK_PALETTE[(o + 1 + Math.abs(zBase)) % CHUNK_PALETTE.length],
+            emissiveIntensity: 1.8, transparent: true, opacity: 0.88,
+          })
+        );
+        orb.position.set((Math.random() - 0.5) * 6, 1.2 + Math.random() * 1.2, (Math.random() - 0.5) * 6);
+        orb.userData.float = Math.random() * Math.PI * 2;
+        group.add(orb);
+      }
+
+      const startPad = new THREE.Mesh(
+        new THREE.PlaneGeometry(8.4, 1.2),
+        new THREE.MeshBasicMaterial({ color: hue, transparent: true, opacity: 0.75 })
       );
-      rail.position.set(0, 0.15, -5);
-      group.add(rail);
+      startPad.rotation.x = -Math.PI / 2;
+      startPad.position.set(0, 0.04, 4.5);
+      group.add(startPad);
+
       scene.add(group);
       trackChunks.push(group);
     }
@@ -679,7 +775,7 @@
 
     function makeEntity(type, lane, z) {
       let mesh;
-      const mat = (c, e = 0.3) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: e, metalness: 0.3, roughness: 0.4 });
+      const mat = (c, e = 0.75) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: e, metalness: 0.25, roughness: 0.18 });
       switch (type) {
         case "churn":
           mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.55, 0), mat(COLORS.churn, 0.6));
@@ -709,7 +805,7 @@
           mesh.position.set(LANES[lane], 1.0, z);
           break;
         case "healthy":
-          mesh = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.2, 0.5), mat(COLORS.healthy));
+          mesh = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.2, 0.5), mat(COLORS.healthy, 1.1));
           mesh.position.set(LANES[lane], 0.6, z);
           break;
         case "obstacle":
@@ -762,7 +858,7 @@
           mesh.position.set(LANES[lane], 0.55, z);
           break;
         default:
-          mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.22, 0), mat(COLORS.gold, 0.8));
+          mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.22, 0), mat(COLORS.gold, 1.4));
           mesh.position.set(LANES[lane], 0.9 + Math.random() * 0.8, z);
           type = "coin";
       }
@@ -965,6 +1061,7 @@
       $("title").classList.add("hidden");
       $("end").classList.add("hidden");
       $("hud").style.visibility = "visible";
+      applyZoneVibe("Connect");
       startNextChallenge();
       showCallout("GO!");
       updateHud();
@@ -994,8 +1091,24 @@
 
         trackChunks.forEach((c) => {
           c.position.z += scroll;
-          if (c.position.z > 12) c.position.z -= 80;
+          if (c.position.z > 12) c.position.z -= 100;
+          c.userData.pulse += dt * 3.5;
+          const pulse = 0.85 + Math.sin(c.userData.pulse) * 0.15;
+          c.children.forEach((child, idx) => {
+            if (idx === 0 && child.material?.emissiveIntensity !== undefined) {
+              child.material.emissiveIntensity = 0.22 * pulse;
+            }
+            if (child.userData?.float !== undefined) {
+              child.userData.float += dt * 2.2;
+              child.position.y += Math.sin(child.userData.float) * 0.002;
+              child.rotation.y += dt * 1.5;
+            }
+          });
         });
+        if (envRim) {
+          envRim.intensity = 2 + Math.sin(clock.elapsedTime * 2.5) * 0.35;
+          envRim.position.z = -4 - Math.sin(clock.elapsedTime * 1.2) * 0.5;
+        }
 
         entities.forEach((ent) => {
           if (ent.dead) return;
