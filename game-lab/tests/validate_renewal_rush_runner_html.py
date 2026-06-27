@@ -17,6 +17,11 @@ REQUIRED = [
     "renewal-rush-runner-best",
     "quivly-logo-forest-white.webp",
     "Subway",
+    "CHALLENGE_POOL",
+    "HURDLE_GAUNTLETS",
+    "spawnGauntlet",
+    "challenge-box",
+    "GAUNTLET!",
 ]
 
 

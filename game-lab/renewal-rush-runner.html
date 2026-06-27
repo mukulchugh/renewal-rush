@@ -24,7 +24,20 @@
     .combo { text-align: center; font-size: 1.8rem; font-weight: 800; color: var(--gold); opacity: 0; text-shadow: 0 4px 20px #000; transition: opacity 0.1s; }
     .combo.on { opacity: 1; animation: combo-pop 0.35s ease; }
     @keyframes combo-pop { 0% { transform: scale(0.7); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
-    .banner { align-self: center; font-size: 0.72rem; color: var(--muted); background: #171717aa; border: 1px solid var(--border); padding: 8px 14px; border-radius: 10px; }
+    .banner { align-self: center; font-size: 0.72rem; color: var(--muted); background: #171717aa; border: 1px solid var(--border); padding: 8px 14px; border-radius: 10px; max-width: 90%; text-align: center; }
+    .challenge-box {
+      align-self: center; width: min(340px, 90%); background: #171717cc; border: 1px solid var(--border);
+      border-radius: 12px; padding: 10px 14px; backdrop-filter: blur(10px);
+    }
+    .challenge-box.done { border-color: var(--green); }
+    .challenge-label { font-size: 0.62rem; color: var(--muted); margin-bottom: 6px; display: flex; justify-content: space-between; }
+    .challenge-label strong { color: var(--gold); }
+    .challenge-bar { height: 6px; background: #262626; border-radius: 4px; overflow: hidden; }
+    .challenge-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--gold)); transition: width 0.25s; width: 0%; }
+    .hurdle-hint { position: fixed; top: 42%; left: 50%; transform: translateX(-50%); font-size: 0.7rem; font-weight: 700;
+      color: var(--accent); opacity: 0; pointer-events: none; z-index: 4; text-shadow: 0 2px 12px #000; }
+    .hurdle-hint.show { animation: hint-pop 0.9s ease forwards; }
+    @keyframes hint-pop { 0% { opacity: 0; transform: translateX(-50%) translateY(8px); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateX(-50%) translateY(-12px); } }
     .overlay { position: fixed; inset: 0; background: #000c; display: grid; place-items: center; z-index: 10; padding: 20px; }
     .overlay.hidden { display: none; }
     .modal { max-width: 400px; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 28px; text-align: center; }
@@ -50,18 +63,24 @@
         <div class="pill">Dist <strong id="t-dist">0</strong>m</div>
         <div class="pill">Speed <strong id="t-spd">1.0</strong>×</div>
         <div class="pill">Fight <strong id="t-combo">0</strong>×</div>
+        <div class="pill">Done <strong id="t-challenges">0</strong></div>
       </div>
     </div>
     <div class="combo" id="combo-display"></div>
-    <div class="banner" id="banner">Subway-style run — dodge green · punch red churn</div>
+    <div class="challenge-box" id="challenge-box">
+      <div class="challenge-label"><span id="challenge-text">Challenge loading…</span><strong id="challenge-progress">0/0</strong></div>
+      <div class="challenge-bar"><div class="challenge-fill" id="challenge-fill"></div></div>
+    </div>
+    <div class="banner" id="banner">Hurdles ahead — jump · slide · punch · complete challenges</div>
   </div>
+  <div class="hurdle-hint" id="hurdle-hint"></div>
   <a class="back" href="index.html">← Game Lab</a>
 
   <div class="overlay" id="title">
     <div class="modal">
       <img src="assets/brand/quivly-logo-forest-white.webp" alt="" />
       <h2>Renewal Run</h2>
-      <p>Endless runner + fighter. Sprint the renewal track, lane-switch like Subway Surfers, punch churn drones, jump obstacles.</p>
+      <p>Subway-style run with hurdles, gauntlets, and rotating challenges. Jump bars, slide beams, dodge gaps, punch churn.</p>
       <div class="controls">
         <div><span>← → / A D</span> switch lane</div>
         <div><span>Space</span> jump</div>
@@ -88,7 +107,22 @@
 
     const LANES = [-2.2, 0, 2.2];
     const BEST_KEY = "renewal-rush-runner-best";
-    const COLORS = { track: 0x0e0e14, accent: 0x6366f1, churn: 0xf87171, healthy: 0x34d399, gold: 0xfcd34d, obstacle: 0x52525b };
+    const COLORS = { track: 0x0e0e14, accent: 0x6366f1, churn: 0xf87171, healthy: 0x34d399, gold: 0xfcd34d, obstacle: 0x52525b, hurdle: 0xfbbf24, danger: 0xef4444 };
+    const CHALLENGE_POOL = [
+      { id: "punch5", label: "Punch 5 churn drones", goal: 5, track: "punches", reward: 1800 },
+      { id: "jump8", label: "Clear 8 hurdles", goal: 8, track: "hurdles", reward: 1500 },
+      { id: "slide6", label: "Slide under 6 beams", goal: 6, track: "slides", reward: 1200 },
+      { id: "lanes12", label: "Switch lanes 12×", goal: 12, track: "lanes", reward: 1000 },
+      { id: "coins10", label: "Collect 10 ARR chips", goal: 10, track: "coins", reward: 2200 },
+      { id: "dist250", label: "Sprint 250m", goal: 250, track: "dist", reward: 2800 },
+      { id: "combo6", label: "Hit 6× fight combo", goal: 6, track: "maxCombo", reward: 2000 },
+    ];
+    const HURDLE_GAUNTLETS = [
+      [{ type: "hurdle", lane: 0 }, { type: "low", lane: 1 }, { type: "churn", lane: 2 }],
+      [{ type: "gap", lane: 1 }, { type: "hurdle", lane: 1 }, { type: "coin", lane: 0 }],
+      [{ type: "beam", lane: 0 }, { type: "beam", lane: 2 }, { type: "mover", lane: 1 }],
+      [{ type: "gate", lane: 1 }, { type: "spike", lane: 0 }, { type: "spike", lane: 2 }],
+    ];
 
     let renderer, scene, camera, clock;
     let player, playerLane = 1, targetLaneX = 0, laneLerp = 0;
@@ -112,6 +146,64 @@
     function sfxHit() { tone(880, 0.07, "triangle", 0.06); }
     function sfxCoin() { tone(1200, 0.05, "sine", 0.05); }
     function sfxCrash() { tone(90, 0.25, "sawtooth", 0.08); }
+    function sfxChallenge() { tone(660, 0.12, "triangle", 0.07); tone(990, 0.1, "sine", 0.05); }
+    function sfxHurdle() { tone(400, 0.06, "sine", 0.04); }
+
+    function hintAction(text) {
+      const el = $("hurdle-hint"); el.textContent = text; el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
+    }
+
+    function pickChallenge() {
+      return CHALLENGE_POOL[Math.floor(Math.random() * CHALLENGE_POOL.length)];
+    }
+
+    function challengeProgress() {
+      if (!state.challenge) return 0;
+      const c = state.challenge;
+      const v = state.stats[c.track] ?? 0;
+      if (c.track === "dist") return Math.min(c.goal, state.dist);
+      if (c.track === "maxCombo") return Math.min(c.goal, state.maxCombo);
+      return Math.min(c.goal, v);
+    }
+
+    function startNextChallenge() {
+      state.challenge = pickChallenge();
+      state.challengeDone = false;
+      $("challenge-box").classList.remove("done");
+      updateChallengeHud();
+      showCallout("CHALLENGE!");
+    }
+
+    function completeChallenge() {
+      if (!state.challenge || state.challengeDone) return;
+      state.challengeDone = true;
+      state.challengesCompleted++;
+      state.arr += state.challenge.reward;
+      $("challenge-box").classList.add("done");
+      sfxChallenge();
+      showCallout(`+${fmt(state.challenge.reward)}!`);
+      setTimeout(() => { if (state.running) startNextChallenge(); }, 1800);
+      updateHud();
+    }
+
+    function bumpChallenge(track, n = 1) {
+      if (!state.challenge || state.challengeDone) return;
+      if (state.challenge.track === track) {
+        state.stats[track] = (state.stats[track] || 0) + n;
+      }
+      if (state.challenge.track === "dist" || state.challenge.track === "maxCombo") { /* tracked elsewhere */ }
+      const prog = challengeProgress();
+      if (prog >= state.challenge.goal) completeChallenge();
+      updateChallengeHud();
+    }
+
+    function updateChallengeHud() {
+      if (!state.challenge) return;
+      const prog = challengeProgress();
+      $("challenge-text").textContent = state.challenge.label;
+      $("challenge-progress").textContent = `${Math.floor(prog)}/${state.challenge.goal}`;
+      $("challenge-fill").style.width = (prog / state.challenge.goal * 100) + "%";
+    }
 
     function showCallout(t) {
       const el = $("callout"); el.textContent = t; el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
@@ -192,8 +284,11 @@
 
     function initState() {
       state = {
-        running: false, gameOver: false, arr: 0, dist: 0, speed: 1, combo: 0,
-        spawnZ: -25, spawnAcc: 0, punchCooldown: 0,
+        running: false, gameOver: false, arr: 0, dist: 0, speed: 1, combo: 0, maxCombo: 0,
+        spawnZ: -25, spawnAcc: 0, punchCooldown: 0, challengesCompleted: 0,
+        challenge: null, challengeDone: false,
+        stats: { punches: 0, hurdles: 0, slides: 0, lanes: 0, coins: 0 },
+        nextGauntletAt: 80, gauntletIdx: 0, lastDistHint: 0,
       };
       entities.forEach((e) => scene.remove(e.mesh)); entities = [];
       playerLane = 1;
@@ -207,18 +302,26 @@
 
     function switchLane(dir) {
       const next = THREE.MathUtils.clamp(playerLane + dir, 0, 2);
-      if (next !== playerLane) { playerLane = next; targetLaneX = LANES[playerLane]; laneLerp = 0; sfxLane(); }
+      if (next !== playerLane) {
+        playerLane = next; targetLaneX = LANES[playerLane]; laneLerp = 0; sfxLane();
+        bumpChallenge("lanes");
+      }
     }
 
     function jump() {
       if (player.userData.jumpY <= 0.01 && player.userData.slideT <= 0) {
         player.userData.jumpVel = 7.5;
         sfxJump();
+        hintAction("JUMP!");
       }
     }
 
     function slide() {
-      if (player.userData.jumpY <= 0.01) player.userData.slideT = 0.45;
+      if (player.userData.jumpY <= 0.01) {
+        player.userData.slideT = 0.45;
+        bumpChallenge("slides");
+        hintAction("SLIDE!");
+      }
     }
 
     function punch() {
@@ -235,7 +338,10 @@
           if (ent.type === "churn") {
             ent.dead = true;
             state.combo++;
+            state.maxCombo = Math.max(state.maxCombo, state.combo);
             state.arr += Math.round(400 * state.speed * (1 + state.combo * 0.15));
+            bumpChallenge("punches");
+            if (state.challenge?.track === "maxCombo" && state.maxCombo >= state.challenge.goal) completeChallenge();
             showCombo(state.combo);
             showCallout(state.combo >= 5 ? "FIGHT STREAK!" : "PUNCH!");
             spawnBurst(ent.mesh.position, COLORS.churn);
@@ -252,6 +358,7 @@
     function collectCoin(ent) {
       ent.dead = true;
       state.arr += Math.round(250 * state.speed);
+      bumpChallenge("coins");
       sfxCoin();
       spawnBurst(ent.mesh.position, COLORS.gold);
       updateHud();
@@ -270,52 +377,112 @@
       }
     }
 
+    function makeEntity(type, lane, z) {
+      let mesh;
+      const mat = (c, e = 0.3) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: e, metalness: 0.3, roughness: 0.4 });
+      switch (type) {
+        case "churn":
+          mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.55, 0), mat(COLORS.churn, 0.6));
+          mesh.position.set(LANES[lane], 1.1, z);
+          break;
+        case "healthy":
+          mesh = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.2, 0.5), mat(COLORS.healthy));
+          mesh.position.set(LANES[lane], 0.6, z);
+          break;
+        case "obstacle":
+          mesh = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.9, 0.6), mat(COLORS.obstacle, 0));
+          mesh.position.set(LANES[lane], 0.45, z);
+          break;
+        case "low":
+        case "beam":
+          mesh = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.45, 0.5), mat(COLORS.hurdle, 0.5));
+          mesh.position.set(LANES[lane], 0.9, z);
+          break;
+        case "hurdle": {
+          const grp = new THREE.Group();
+          const postL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.1, 0.12), mat(COLORS.hurdle, 0.4));
+          postL.position.set(-0.7, 0.55, 0);
+          const postR = postL.clone(); postR.position.x = 0.7;
+          const bar = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.12, 0.12), mat(COLORS.gold, 0.7));
+          bar.position.y = 0.85;
+          grp.add(postL, postR, bar);
+          grp.position.set(LANES[lane], 0, z);
+          mesh = grp;
+          type = "hurdle";
+          break;
+        }
+        case "gap": {
+          mesh = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.15, 1.2), mat(COLORS.danger, 0.8));
+          mesh.position.set(LANES[lane], 0.08, z);
+          break;
+        }
+        case "spike":
+          mesh = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.7, 6), mat(COLORS.danger, 0.5));
+          mesh.position.set(LANES[lane], 0.35, z);
+          break;
+        case "gate": {
+          const grp = new THREE.Group();
+          const bar = new THREE.Mesh(new THREE.BoxGeometry(7, 0.18, 0.4), mat(COLORS.accent, 0.6));
+          bar.position.y = 0.95;
+          const legL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.2, 0.2), mat(COLORS.obstacle, 0));
+          legL.position.set(-3.2, 0.6, 0);
+          const legR = legL.clone(); legR.position.x = 3.2;
+          grp.add(bar, legL, legR);
+          grp.position.set(0, 0, z);
+          mesh = grp;
+          type = "gate";
+          lane = 1;
+          break;
+        }
+        case "mover":
+          mesh = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.0, 0.5), mat(COLORS.obstacle, 0.2));
+          mesh.position.set(LANES[lane], 0.55, z);
+          break;
+        default:
+          mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.22, 0), mat(COLORS.gold, 0.8));
+          mesh.position.set(LANES[lane], 0.9 + Math.random() * 0.8, z);
+          type = "coin";
+      }
+      scene.add(mesh);
+      const ent = {
+        mesh, type, lane, dead: false,
+        mover: type === "mover",
+        moverPhase: Math.random() * Math.PI * 2,
+        cleared: false,
+      };
+      entities.push(ent);
+      return ent;
+    }
+
+    function spawnGauntlet() {
+      const pattern = HURDLE_GAUNTLETS[state.gauntletIdx % HURDLE_GAUNTLETS.length];
+      state.gauntletIdx++;
+      let z = state.spawnZ;
+      pattern.forEach((h, i) => {
+        makeEntity(h.type, h.lane, z - i * 2.8);
+      });
+      state.spawnZ = z - pattern.length * 2.8 - 4;
+      showCallout("GAUNTLET!");
+      hintAction("Jump · Slide · Punch!");
+    }
+
     function spawnEntity() {
       const lane = Math.floor(Math.random() * 3);
       const roll = Math.random();
-      let type, mesh;
       const z = state.spawnZ;
-
-      if (roll < 0.38) {
-        type = "churn";
-        mesh = new THREE.Mesh(
-          new THREE.OctahedronGeometry(0.55, 0),
-          new THREE.MeshStandardMaterial({ color: COLORS.churn, emissive: COLORS.churn, emissiveIntensity: 0.6, flatShading: true })
-        );
-        mesh.position.set(LANES[lane], 1.1, z);
-      } else if (roll < 0.58) {
-        type = "healthy";
-        mesh = new THREE.Mesh(
-          new THREE.BoxGeometry(1.1, 1.2, 0.5),
-          new THREE.MeshStandardMaterial({ color: COLORS.healthy, emissive: COLORS.healthy, emissiveIntensity: 0.3 })
-        );
-        mesh.position.set(LANES[lane], 0.6, z);
-      } else if (roll < 0.72) {
-        type = "obstacle";
-        mesh = new THREE.Mesh(
-          new THREE.BoxGeometry(1.4, 0.9, 0.6),
-          new THREE.MeshStandardMaterial({ color: COLORS.obstacle, metalness: 0.5, roughness: 0.4 })
-        );
-        mesh.position.set(LANES[lane], 0.45, z);
-      } else if (roll < 0.88) {
-        type = "low";
-        mesh = new THREE.Mesh(
-          new THREE.BoxGeometry(1.6, 0.5, 0.5),
-          new THREE.MeshStandardMaterial({ color: COLORS.obstacle })
-        );
-        mesh.position.set(LANES[lane], 0.55, z);
-      } else {
-        type = "coin";
-        mesh = new THREE.Mesh(
-          new THREE.OctahedronGeometry(0.22, 0),
-          new THREE.MeshStandardMaterial({ color: COLORS.gold, emissive: COLORS.gold, emissiveIntensity: 0.8 })
-        );
-        mesh.position.set(LANES[lane], 0.9 + Math.random() * 0.8, z);
-      }
-
-      scene.add(mesh);
-      entities.push({ mesh, type, lane, dead: false });
-      state.spawnZ -= 5 + Math.random() * 4;
+      let type;
+      if (roll < 0.22) type = "churn";
+      else if (roll < 0.32) type = "healthy";
+      else if (roll < 0.42) type = "hurdle";
+      else if (roll < 0.52) type = "beam";
+      else if (roll < 0.60) type = "gap";
+      else if (roll < 0.67) type = "spike";
+      else if (roll < 0.74) type = "mover";
+      else if (roll < 0.80) type = "gate";
+      else if (roll < 0.88) type = "obstacle";
+      else type = "coin";
+      makeEntity(type, lane, z);
+      state.spawnZ -= 4.5 + Math.random() * 3.5;
     }
 
     function collide() {
@@ -326,11 +493,24 @@
       const pz = -0.5;
 
       for (const ent of entities) {
-        if (ent.dead || ent.lane !== playerLane) continue;
         const ez = ent.mesh.position.z;
         if (Math.abs(ez - pz) > 1.1) continue;
 
-        if (ent.type === "coin") { collectCoin(ent); continue; }
+        if (ent.type === "coin") {
+          if (ent.lane === playerLane || ent.mesh.position.distanceTo(player.position) < 1.5) collectCoin(ent);
+          continue;
+        }
+
+        if (ent.type === "gate") {
+          if (py > 0.55) {
+            if (!ent.cleared) { ent.cleared = true; bumpChallenge("hurdles"); sfxHurdle(); }
+            continue;
+          }
+          crash();
+          return;
+        }
+
+        if (ent.dead || ent.lane !== playerLane) continue;
 
         if (ent.type === "churn") continue; // punch only
 
@@ -345,13 +525,27 @@
           continue;
         }
 
-        if (ent.type === "obstacle") {
-          if (py > 0.55) continue;
+        const jumpTypes = ["obstacle", "hurdle", "gap", "spike", "gate"];
+        const slideTypes = ["low", "beam"];
+
+        if (jumpTypes.includes(ent.type)) {
+          if (py > 0.5) {
+            if (!ent.cleared) { ent.cleared = true; bumpChallenge("hurdles"); sfxHurdle(); }
+            continue;
+          }
           crash();
           return;
         }
-        if (ent.type === "low") {
-          if (sliding) continue;
+        if (slideTypes.includes(ent.type)) {
+          if (sliding) {
+            if (!ent.cleared) { ent.cleared = true; bumpChallenge("hurdles"); sfxHurdle(); }
+            continue;
+          }
+          crash();
+          return;
+        }
+        if (ent.type === "mover") {
+          if (py > 0.45) continue;
           crash();
           return;
         }
@@ -366,7 +560,7 @@
       const newBest = state.arr > best;
       if (newBest) localStorage.setItem(BEST_KEY, String(state.arr));
       $("end-title").textContent = "Run crashed.";
-      $("end-stats").textContent = `${fmt(state.arr)} · ${Math.round(state.dist)}m · ${state.combo} best combo · ${state.speed.toFixed(1)}× top speed`;
+      $("end-stats").textContent = `${fmt(state.arr)} · ${Math.round(state.dist)}m · ${state.challengesCompleted} challenges · ${state.maxCombo}× best combo`;
       $("end-best").textContent = newBest ? "New best run!" : best > 0 ? `Best: ${fmt(best)}` : "";
       $("end").classList.remove("hidden");
       $("hud").style.visibility = "hidden";
@@ -377,6 +571,9 @@
       $("t-dist").textContent = Math.round(state.dist);
       $("t-spd").textContent = state.speed.toFixed(1);
       $("t-combo").textContent = state.combo;
+      $("t-challenges").textContent = state.challengesCompleted;
+      updateChallengeHud();
+      if (state.challenge?.track === "dist" && state.dist >= state.challenge.goal) completeChallenge();
     }
 
     function startRun() {
@@ -385,6 +582,7 @@
       $("title").classList.add("hidden");
       $("end").classList.add("hidden");
       $("hud").style.visibility = "visible";
+      startNextChallenge();
       showCallout("GO!");
       updateHud();
       if (audioCtx?.state === "suspended") audioCtx.resume();
@@ -413,6 +611,12 @@
             ent.mesh.rotation.x += dt * 2;
             ent.mesh.position.y = 1.1 + Math.sin(clock.elapsedTime * 6) * 0.08;
           }
+          if (ent.mover) {
+            ent.moverPhase += dt * 2.2;
+            const laneIdx = 1 + Math.round(Math.sin(ent.moverPhase));
+            ent.lane = laneIdx;
+            ent.mesh.position.x = THREE.MathUtils.lerp(ent.mesh.position.x, LANES[laneIdx], dt * 6);
+          }
           if (ent.mesh.position.z > 8) {
             ent.dead = true;
             scene.remove(ent.mesh);
@@ -421,8 +625,20 @@
         });
         entities = entities.filter((e) => !e.dead);
 
+        if (state.dist >= state.nextGauntletAt) {
+          state.nextGauntletAt += 70 + state.gauntletIdx * 8;
+          spawnGauntlet();
+        }
+
         state.spawnAcc += scroll;
-        if (state.spawnAcc > 6) { state.spawnAcc = 0; spawnEntity(); }
+        const spawnGap = Math.max(4, 7 - state.speed);
+        if (state.spawnAcc > spawnGap) { state.spawnAcc = 0; spawnEntity(); }
+
+        if (state.dist - state.lastDistHint > 45) {
+          state.lastDistHint = state.dist;
+          const hints = ["Jump hurdles!", "Slide beams!", "Punch churn!", "Watch moving barriers!"];
+          hintAction(hints[Math.floor(Math.random() * hints.length)]);
+        }
 
         laneLerp = Math.min(1, laneLerp + dt * 14);
         player.position.x = THREE.MathUtils.lerp(player.position.x, targetLaneX, laneLerp);
