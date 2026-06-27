@@ -5,17 +5,17 @@
     "confirmedTitle": "Renewal Rush",
     "company": "Quivly.ai",
     "tagline": "AI workforce for post-sales teams",
-    "genre": "Browser arcade / Signal Triage micro-game",
+    "genre": "3D Signal Triage arcade — browser Three.js + Unreal arena",
     "tone": "Fast, witty, enterprise-playful — not cringe, not heavy",
     "oneLiner": "Connect your stack. Surface every signal — market to CRM. Deploy before renewal day.",
     "playTime": "90 seconds per run",
-    "scope": "Small — browser Signal Triage board, embeddable on quivly.ai",
+    "scope": "Small — 3D command-center FPS in browser; Unreal arena for full-engine polish",
     "audience": ["Quivly team", "customers (CS / post-sales)", "marketing / conferences / social"],
-    "updatedAt": "2026-06-27T21:30:00Z",
-    "status": "premise-locked-stack-narrative",
+    "updatedAt": "2026-06-27T22:00:00Z",
+    "status": "3d-prototype-shipped",
     "landingSource": "data/quivly-landing.json",
-    "platformRecommendation": "browser-first",
-    "platformNote": "Ship marketing game as embeddable browser arcade (Game Lab → quivly.ai). Keep Unreal as learning sandbox only."
+    "platformRecommendation": "3d-browser-primary",
+    "platformNote": "Primary: renewal-rush-3d.html (Three.js FPS). Secondary: renewal-rush.html 2D board. Unreal Lvl_ArenaShooter for engine-native 3D."
   },
   "landingPage": {
     "url": "https://www.quivly.ai",

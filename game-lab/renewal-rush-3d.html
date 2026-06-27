@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Renewal Rush 3D — Quivly</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; font-family: Inter, system-ui, sans-serif; }
+    #canvas { display: block; width: 100%; height: 100%; }
+    .hud {
+      position: fixed; inset: 0; pointer-events: none; color: #fafafa;
+      display: flex; flex-direction: column; justify-content: space-between;
+      padding: 16px 20px;
+    }
+    .hud-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+    .hud-left img { height: 24px; }
+    .hud-left h1 { font-size: 0.85rem; font-weight: 600; margin-top: 6px; }
+    .hud-left span { color: #a3a3a3; font-weight: 400; }
+    .stats { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+    .pill {
+      font-family: "IBM Plex Mono", monospace; font-size: 0.65rem;
+      padding: 6px 10px; border-radius: 8px; background: #171717cc;
+      border: 1px solid #333; backdrop-filter: blur(8px);
+    }
+    .pill strong { color: #6366f1; }
+    .crosshair {
+      position: fixed; left: 50%; top: 50%; width: 20px; height: 20px;
+      margin: -10px 0 0 -10px; pointer-events: none;
+    }
+    .crosshair::before, .crosshair::after {
+      content: ""; position: absolute; background: #6366f1aa;
+    }
+    .crosshair::before { left: 9px; top: 4px; width: 2px; height: 12px; }
+    .crosshair::after { top: 9px; left: 4px; height: 2px; width: 12px; }
+    .banner {
+      text-align: center; font-size: 0.8rem; color: #a3a3a3;
+      background: #171717aa; border: 1px solid #333; border-radius: 8px;
+      padding: 8px 16px; align-self: center; backdrop-filter: blur(8px);
+    }
+    .banner.active { color: #6366f1; border-color: #6366f1; }
+    .churn-wrap { max-width: 320px; align-self: center; width: 100%; }
+    .churn-label { font-size: 0.6rem; color: #a3a3a3; margin-bottom: 4px; display: flex; justify-content: space-between; }
+    .churn-bar { height: 5px; background: #262626; border-radius: 3px; overflow: hidden; }
+    .churn-fill { height: 100%; background: linear-gradient(90deg, #34d399, #fbbf24, #f87171); transition: width 0.3s; }
+    .overlay {
+      position: fixed; inset: 0; background: #000c; display: grid; place-items: center;
+      z-index: 10; pointer-events: auto;
+    }
+    .overlay.hidden { display: none; }
+    .modal {
+      max-width: 400px; width: 90%; background: #171717; border: 1px solid #333;
+      border-radius: 20px; padding: 28px; text-align: center;
+    }
+    .modal img { height: 32px; margin-bottom: 16px; }
+    .modal h2 { font-size: 1.4rem; margin-bottom: 8px; }
+    .modal p { color: #a3a3a3; font-size: 0.9rem; line-height: 1.5; margin-bottom: 20px; }
+    .btn {
+      background: #6366f1; color: #fff; border: none; border-radius: 10px;
+      padding: 12px 24px; font-weight: 600; cursor: pointer; font-size: 0.9rem;
+    }
+    .hint { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
+      font-size: 0.65rem; color: #666; pointer-events: none; }
+    .floater {
+      position: fixed; font-family: "IBM Plex Mono", monospace; font-size: 0.8rem;
+      color: #6366f1; pointer-events: none; animation: up 1s forwards;
+      text-shadow: 0 2px 8px #000;
+    }
+    .floater.bad { color: #f87171; }
+    @keyframes up { to { opacity: 0; transform: translateY(-40px); } }
+    a.back { position: fixed; bottom: 12px; left: 12px; font-size: 0.7rem; color: #666; z-index: 5; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div class="crosshair" id="crosshair"></div>
+  <div class="hud" id="hud" style="visibility:hidden">
+    <div class="hud-top">
+      <div class="hud-left">
+        <img src="assets/brand/quivly-logo-forest-white.webp" alt="" />
+        <h1>Renewal Rush <span>3D</span></h1>
+      </div>
+      <div class="stats">
+        <div class="pill">Renewal <strong id="t-timer">90</strong>s</div>
+        <div class="pill">ARR <strong id="t-arr">$0</strong></div>
+        <div class="pill">Signals <strong id="t-sig">0</strong></div>
+        <div class="pill">Stack <strong id="t-stack">0%</strong></div>
+      </div>
+    </div>
+    <div class="banner" id="banner">Click to aim · Left-click deploy Agent Pulse</div>
+    <div class="churn-wrap">
+      <div class="churn-label"><span>Portfolio health</span><span id="t-churn">100%</span></div>
+      <div class="churn-bar"><div class="churn-fill" id="churn-fill" style="width:100%"></div></div>
+    </div>
+  </div>
+  <p class="hint" id="hint">WASD move · Mouse look · Click deploy</p>
+  <a class="back" href="index.html">← Game Lab</a>
+
+  <div class="overlay" id="title">
+    <div class="modal">
+      <img src="assets/brand/quivly-logo-forest-white.webp" alt="" />
+      <h2>Renewal Rush 3D</h2>
+      <p>Customer Command arena. Connect your stack, surface floating account signals, deploy Agent Pulse before renewal day.</p>
+      <button class="btn" id="start">Enter command center</button>
+    </div>
+  </div>
+  <div class="overlay hidden" id="end">
+    <div class="modal">
+      <img src="assets/brand/quivly-logo-forest-white.webp" alt="" />
+      <h2 id="end-title">You saved the quarter.</h2>
+      <p id="end-rank" style="color:#fcd34d;font-weight:600"></p>
+      <p id="end-stats" style="font-family:monospace;font-size:0.85rem"></p>
+      <button class="btn" id="replay">Play again</button>
+    </div>
+  </div>
+
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+
+    const INTEGRATIONS = ["CRM", "Calls", "Revenue", "Support", "Comms", "Market"];
+    const COMPANIES = ["Vertex Labs", "CloudNine", "DataForge", "Pulse AI", "Stackline", "Northbeam"];
+    const CONNECT_MS = 10000;
+    const GAME_MS = 90000;
+    const COLORS = { healthy: 0x34d399, expansion: 0xfbbf24, atRisk: 0xf87171, accent: 0x6366f1, market: 0xa78bfa };
+
+    let renderer, scene, camera, clock;
+    let orbs = [];
+    let stackMeshes = [];
+    let state = {};
+    let keys = {};
+    let pointerLocked = false;
+    let raycaster = new THREE.Raycaster();
+    let mouse = new THREE.Vector2(0, 0);
+    let timers = [];
+
+    function $(id) { return document.getElementById(id); }
+
+    function fmt(n) {
+      return n >= 1000 ? "$" + Math.round(n / 1000) + "K" : "$" + Math.round(n);
+    }
+
+    function clearTimers() {
+      timers.forEach((t) => clearInterval(t));
+      timers.forEach((t) => clearTimeout(t));
+      timers = [];
+    }
+
+    function initThree() {
+      const canvas = $("canvas");
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      renderer.setSize(innerWidth, innerHeight);
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0a0a);
+      scene.fog = new THREE.FogExp2(0x0a0a0a, 0.035);
+
+      camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 100);
+      camera.position.set(0, 1.7, 6);
+
+      const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(40, 40),
+        new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.6, roughness: 0.4 })
+      );
+      floor.rotation.x = -Math.PI / 2;
+      scene.add(floor);
+
+      const grid = new THREE.GridHelper(40, 40, 0x6366f1, 0x1a1a2e);
+      grid.position.y = 0.01;
+      scene.add(grid);
+
+      scene.add(new THREE.AmbientLight(0x404060, 0.4));
+      const key = new THREE.DirectionalLight(0x6366f1, 1.2);
+      key.position.set(4, 8, 2);
+      scene.add(key);
+      const rim = new THREE.PointLight(0x6366f1, 2, 20);
+      rim.position.set(-6, 3, -4);
+      scene.add(rim);
+
+      // Stack pillars along left wall
+      INTEGRATIONS.forEach((name, i) => {
+        const geo = new THREE.BoxGeometry(0.4, 2.2, 0.4);
+        const mat = new THREE.MeshStandardMaterial({ color: 0x262626, emissive: 0x000000, metalness: 0.5, roughness: 0.3 });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(-8, 1.1, -4 + i * 1.6);
+        mesh.userData = { integration: name, connected: false };
+        scene.add(mesh);
+        stackMeshes.push(mesh);
+
+        const label = new THREE.PointLight(0x6366f1, 0, 3);
+        label.position.copy(mesh.position).add(new THREE.Vector3(0, 1.2, 0));
+        mesh.userData.light = label;
+        scene.add(label);
+      });
+
+      clock = new THREE.Clock();
+    }
+
+    function initState() {
+      state = {
+        startedAt: 0,
+        connectDone: false,
+        connected: 0,
+        arr: 0,
+        signals: new Set(),
+        rescued: 0,
+        churn: 100,
+        gameOver: false,
+        spawnMs: 1800,
+        yaw: 0,
+        pitch: 0,
+        pos: new THREE.Vector3(0, 1.7, 6),
+      };
+      orbs.forEach((o) => scene.remove(o.mesh));
+      orbs = [];
+    }
+
+    function stackPct() { return Math.round((state.connected / INTEGRATIONS.length) * 100); }
+
+    function updateHud() {
+      const left = Math.max(0, Math.ceil((GAME_MS - (Date.now() - state.startedAt)) / 1000));
+      $("t-timer").textContent = left;
+      $("t-arr").textContent = fmt(state.arr);
+      $("t-sig").textContent = state.signals.size;
+      $("t-stack").textContent = stackPct() + "%";
+      $("t-churn").textContent = Math.round(state.churn) + "%";
+      $("churn-fill").style.width = state.churn + "%";
+      const b = $("banner");
+      if (!state.connectDone) {
+        b.textContent = "Connecting stack…";
+        b.classList.add("active");
+      } else {
+        b.textContent = "Aim at 🔴 at-risk orbs · Left-click Agent Pulse";
+        b.classList.remove("active");
+      }
+    }
+
+    function connectStack(i) {
+      const mesh = stackMeshes[i];
+      if (!mesh || mesh.userData.connected) return;
+      mesh.userData.connected = true;
+      mesh.material.emissive.setHex(COLORS.accent);
+      mesh.material.emissiveIntensity = 0.6;
+      mesh.userData.light.intensity = 1.5;
+      state.connected++;
+      updateHud();
+    }
+
+    function spawnOrb() {
+      if (state.gameOver) return;
+      const statusRoll = Math.random();
+      let status = "healthy";
+      if (statusRoll < 0.25 + state.connected * 0.02) status = "at-risk";
+      else if (statusRoll < 0.35) status = "expansion";
+
+      const chipCount = state.connectDone ? (Math.random() < 0.4 ? 2 : 1) + (Math.random() < 0.2 ? 1 : 0) : 1;
+      const color = status === "healthy" ? COLORS.healthy : status === "expansion" ? COLORS.expansion : COLORS.atRisk;
+
+      const geo = new THREE.SphereGeometry(0.35 + chipCount * 0.05, 24, 24);
+      const mat = new THREE.MeshStandardMaterial({
+        color, emissive: color, emissiveIntensity: 0.5,
+        metalness: 0.3, roughness: 0.2, transparent: true, opacity: 0.92,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 3 + Math.random() * 5;
+      mesh.position.set(Math.cos(angle) * dist, 1.2 + Math.random() * 1.5, Math.sin(angle) * dist - 2);
+      scene.add(mesh);
+
+      const light = new THREE.PointLight(color, 0.8, 4);
+      light.position.copy(mesh.position);
+      scene.add(light);
+
+      const company = COMPANIES[Math.floor(Math.random() * COMPANIES.length)];
+      const arr = 18000 + Math.random() * 40000;
+      const orb = {
+        mesh, light, status, chipCount, company, arr,
+        born: Date.now(), ttl: 3000 + Math.random() * 2000,
+        bob: Math.random() * Math.PI * 2,
+      };
+      orbs.push(orb);
+
+      timers.push(setTimeout(() => {
+        if (orbs.includes(orb)) expireOrb(orb);
+      }, orb.ttl));
+    }
+
+    function showFloater(text, bad) {
+      const f = document.createElement("div");
+      f.className = "floater" + (bad ? " bad" : "");
+      f.textContent = text;
+      f.style.left = "50%";
+      f.style.top = "45%";
+      document.body.appendChild(f);
+      setTimeout(() => f.remove(), 1000);
+    }
+
+    function removeOrb(orb) {
+      scene.remove(orb.mesh);
+      scene.remove(orb.light);
+      orbs = orbs.filter((o) => o !== orb);
+    }
+
+    function deployOrb(orb) {
+      if (orb.status === "healthy") {
+        state.churn = Math.max(0, state.churn - 5);
+        showFloater("Wrong tag — healthy account", true);
+        removeOrb(orb);
+        updateHud();
+        if (state.churn <= 0) endGame(false);
+        return;
+      }
+      let mult = orb.chipCount >= 3 ? 2 : orb.chipCount >= 2 ? 1.5 : 1;
+      if (orb.chipCount >= 2 && Math.random() < 0.3) mult = 2.5;
+      const saved = Math.round(orb.arr * mult * (orb.status === "expansion" ? 0.6 : 1));
+      state.arr += saved;
+      if (orb.status === "at-risk") state.rescued++;
+      state.signals.add(orb.chipCount);
+      showFloater(`+${fmt(saved)} · Draft ready`);
+      removeOrb(orb);
+      updateHud();
+    }
+
+    function expireOrb(orb) {
+      if (!orbs.includes(orb)) return;
+      if (orb.status === "at-risk") {
+        const mult = orb.chipCount >= 2 ? 2 : 1;
+        state.churn = Math.max(0, state.churn - 4 * mult);
+        showFloater("Missed at-risk signal!", true);
+        if (state.churn <= 0) endGame(false);
+      }
+      removeOrb(orb);
+      updateHud();
+    }
+
+    function tryDeploy() {
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObjects(orbs.map((o) => o.mesh));
+      if (hits.length) {
+        const orb = orbs.find((o) => o.mesh === hits[0].object);
+        if (orb) deployOrb(orb);
+      }
+    }
+
+    function endGame(ok) {
+      if (state.gameOver) return;
+      state.gameOver = true;
+      clearTimers();
+      document.exitPointerLock?.();
+      $("end-title").textContent = ok || state.churn > 0 ? "You saved the quarter." : "Churn got there first.";
+      const rank = state.arr >= 200000 ? "Chief Renewal Officer" : state.arr >= 80000 ? "CSM Speedrunner" : "Renewal Rookie";
+      $("end-rank").textContent = rank;
+      $("end-stats").textContent = `${fmt(state.arr)} saved · ${state.signals.size} signals · ${stackPct()}% stack · ${state.rescued} rescued`;
+      $("end").classList.remove("hidden");
+    }
+
+    function startGame() {
+      clearTimers();
+      initState();
+      $("title").classList.add("hidden");
+      $("end").classList.add("hidden");
+      $("hud").style.visibility = "visible";
+      state.startedAt = Date.now();
+      updateHud();
+
+      INTEGRATIONS.forEach((_, i) => {
+        timers.push(setTimeout(() => connectStack(i), (CONNECT_MS / INTEGRATIONS.length) * i + 300));
+      });
+      timers.push(setTimeout(() => { state.connectDone = true; updateHud(); }, CONNECT_MS));
+
+      timers.push(setInterval(updateHud, 200));
+      timers.push(setInterval(() => { if (!state.gameOver) spawnOrb(); }, state.spawnMs));
+      timers.push(setInterval(() => { if (!state.gameOver) state.spawnMs = Math.max(900, state.spawnMs - 30); }, 15000));
+      timers.push(setTimeout(() => endGame(true), GAME_MS));
+
+      canvas.requestPointerLock();
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = clock.getDelta();
+
+      if (pointerLocked && !state.gameOver) {
+        const speed = 4 * dt;
+        const dir = new THREE.Vector3();
+        camera.getWorldDirection(dir);
+        dir.y = 0;
+        dir.normalize();
+        const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0));
+        if (keys["KeyW"]) state.pos.addScaledVector(dir, speed);
+        if (keys["KeyS"]) state.pos.addScaledVector(dir, -speed);
+        if (keys["KeyA"]) state.pos.addScaledVector(right, -speed);
+        if (keys["KeyD"]) state.pos.addScaledVector(right, speed);
+        state.pos.x = THREE.MathUtils.clamp(state.pos.x, -7, 7);
+        state.pos.z = THREE.MathUtils.clamp(state.pos.z, -2, 10);
+        camera.position.copy(state.pos);
+        camera.rotation.order = "YXZ";
+        camera.rotation.y = state.yaw;
+        camera.rotation.x = state.pitch;
+      }
+
+      const t = clock.elapsedTime;
+      orbs.forEach((orb) => {
+        orb.mesh.position.y += Math.sin(t * 2 + orb.bob) * 0.002;
+        orb.mesh.rotation.y += dt * 0.8;
+        orb.light.position.copy(orb.mesh.position);
+      });
+
+      renderer.render(scene, camera);
+    }
+
+    const canvas = $("canvas");
+    initThree();
+    animate();
+
+    $("start").onclick = startGame;
+    $("replay").onclick = startGame;
+
+    canvas.addEventListener("click", () => {
+      if (state.gameOver) return;
+      if (!$("title").classList.contains("hidden") || !$("end").classList.contains("hidden")) return;
+      if (!pointerLocked) canvas.requestPointerLock();
+      else tryDeploy();
+    });
+
+    document.addEventListener("pointerlockchange", () => {
+      pointerLocked = document.pointerLockElement === canvas;
+    });
+
+    document.addEventListener("mousemove", (e) => {
+      if (!pointerLocked) return;
+      state.yaw -= e.movementX * 0.002;
+      state.pitch -= e.movementY * 0.002;
+      state.pitch = THREE.MathUtils.clamp(state.pitch, -0.6, 0.6);
+    });
+
+    document.addEventListener("keydown", (e) => { keys[e.code] = true; });
+    document.addEventListener("keyup", (e) => { keys[e.code] = false; });
+
+    window.addEventListener("resize", () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+  </script>
+</body>
+</html>

@@ -8,23 +8,23 @@
     "path": "/Users/mukulchugh/Documents/Unreal Projects/MyProject"
   },
   "session": {
-    "phase": "prototype-playable",
+    "phase": "prototype-3d-playable",
     "currentLesson": "lesson-03-signal-triage",
     "agentStatus": "ready",
-    "agentMessage": "Renewal Rush playable at /renewal-rush.html — stack connect, signal chips, Full Stack multipliers. Press Play and tap at-risk cards.",
+    "agentMessage": "Renewal Rush 3D is live — WASD + mouse in the command center. Stack pillars connect, floating orbs spawn, click to deploy Agent Pulse. Unreal arena wired as Lvl_ArenaShooter default.",
     "mcpConnected": true,
     "mcpUrl": "http://127.0.0.1:8000/mcp",
     "unrealRunning": true
   },
   "liveArtifact": {
-    "title": "Renewal Rush — browser prototype",
-    "type": "renewal-rush.html",
+    "title": "Renewal Rush 3D — command center",
+    "type": "renewal-rush-3d.html",
     "highlight": "game"
   },
   "nextActions": [
-    "Play renewal-rush.html — verify stack connect + chip multipliers feel right",
-    "Polish: integration logos from quivly.ai, sound on deploy",
-    "Embed on quivly.ai or share score screenshot flow"
+    "Play renewal-rush-3d.html — verify FPS feel + orb deploy loop",
+    "Unreal: Press Play on Lvl_ArenaShooter for full-engine 3D arena",
+    "Wire 90s timer + ARR HUD in BP_ShooterGameMode blueprints"
   ],
   "userInputPending": []
 }

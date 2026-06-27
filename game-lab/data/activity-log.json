@@ -74,6 +74,11 @@
       "time": "2026-06-27T22:00:00Z",
       "who": "agent",
       "text": "Renewal Rush playable prototype shipped: game-lab/renewal-rush.html — stack rail, signal chips, 90s loop, end screen."
+    },
+    {
+      "time": "2026-06-27T22:15:00Z",
+      "who": "agent",
+      "text": "Renewal Rush 3D shipped: renewal-rush-3d.html (Three.js FPS) — WASD, pointer-lock aim, floating orbs, stack pillars. Unreal MCP pass: 5 AccountOrbs labeled, gun hidden, Lvl_ArenaShooter set as default map."
     }
   ]
 }
