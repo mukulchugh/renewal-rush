@@ -148,6 +148,22 @@ def validate_premise_and_loop(data: dict, errors: list[str]) -> None:
         assert_true(fragment in steps, f"gameplayLoop.steps missing: {fragment}", errors)
 
 
+def validate_signal_stack_narrative(data: dict, errors: list[str]) -> None:
+    stack = data.get("signalStack")
+    assert_true(isinstance(stack, dict), "signalStack section missing", errors)
+    if not isinstance(stack, dict):
+        return
+    integrations = stack.get("integrations", [])
+    assert_true(len(integrations) >= 6, "signalStack needs 6+ integrations", errors)
+    gamify = stack.get("gamification", {})
+    assert_true(gamify.get("connectPhase"), "signalStack.gamification.connectPhase missing", errors)
+    assert_true(gamify.get("surfacePhase"), "signalStack.gamification.surfacePhase missing", errors)
+
+    loop = data.get("gameplayLoop", {})
+    phases = loop.get("phases", [])
+    assert_true(any(p.get("name") == "connect" for p in phases), "gameplayLoop.phases must include connect", errors)
+
+
 def validate_meta_and_build(data: dict, errors: list[str]) -> None:
     meta = data.get("meta", {})
     assert_true(meta.get("platformRecommendation") == "browser-first", "meta.platformRecommendation must be browser-first", errors)
@@ -190,6 +206,7 @@ def main() -> int:
     validate_evidence_artifacts(evidence, errors)
     validate_benchmark_provenance(data, evidence, errors)
     validate_premise_and_loop(data, errors)
+    validate_signal_stack_narrative(data, errors)
     validate_meta_and_build(data, errors)
     validate_landing_alignment(data, landing, errors)
 

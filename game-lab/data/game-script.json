@@ -7,12 +7,12 @@
     "tagline": "AI workforce for post-sales teams",
     "genre": "Browser arcade / Signal Triage micro-game",
     "tone": "Fast, witty, enterprise-playful — not cringe, not heavy",
-    "oneLiner": "At-risk accounts keep surfacing. Deploy Quivly before churn gets there first.",
+    "oneLiner": "Connect your stack. Surface every signal — market to CRM. Deploy before renewal day.",
     "playTime": "90 seconds per run",
     "scope": "Small — browser Signal Triage board, embeddable on quivly.ai",
     "audience": ["Quivly team", "customers (CS / post-sales)", "marketing / conferences / social"],
-    "updatedAt": "2026-06-27T20:30:00Z",
-    "status": "premise-locked",
+    "updatedAt": "2026-06-27T21:30:00Z",
+    "status": "premise-locked-stack-narrative",
     "landingSource": "data/quivly-landing.json",
     "platformRecommendation": "browser-first",
     "platformNote": "Ship marketing game as embeddable browser arcade (Game Lab → quivly.ai). Keep Unreal as learning sandbox only."
@@ -118,13 +118,13 @@
         "subtitle": "Whack-a-Risk",
         "recommended": true,
         "mechanic": "At-risk account cards pop up — click/tap to Deploy Agent. Healthy = ignore. Expansion = bonus. Miss at-risk = churn tick.",
-        "story": "Renewal week. Signals flood in faster than your team can triage. One tap — Quivly already drafted the save.",
-        "oneLiner": "At-risk accounts keep surfacing. Deploy Quivly before churn gets there first.",
+        "story": "Stack scattered across tools. Quivly Connect pipes CRM, calls, revenue, support, and market signals into one profile — then you triage what surfaces.",
+        "oneLiner": "Connect your stack. Surface every signal — market to CRM. Deploy before renewal day.",
         "productMapping": {
-          "connect": "Wave intro — signals flood the board",
-          "see": "Each pop shows account name, ARR, health score, usage delta",
-          "score": "Card color = health (green / amber / red)",
-          "act": "Tap deploy → '+ARR Saved' + 'Draft ready' floater"
+          "connect": "Stack rail fills (CRM, calls, revenue, support, market) — each pipe unlocks new signal chips on cards",
+          "see": "Unified Customer 360 card: account + ARR + health + source chips showing which integrations surfaced the risk",
+          "score": "Health color + multi-source badge — 2+ chips = Full Stack Signal (higher ARR on deploy)",
+          "act": "Tap deploy → draft grounded in the surfaced signals ('Draft ready — grounded in Gong + Stripe')"
         },
         "playTime": "60–90 seconds",
         "complexity": "very-low",
@@ -198,47 +198,85 @@
       "vsNextBestAction": "Faithful to Actions Feed but reads as a quiz, not an arcade — better as phase-2 variant after core loop ships.",
       "vsSignalSort": "Teaches full Connect→See→Score→Act but four lanes overload first-time players; fails the 5-second metaphor test.",
       "vsUnrealFps": "139-actor arena + blueprints + MCP polish is high build cost for a 90s marketing embed; browser ships faster and embeds on quivly.ai.",
-      "productFit": "Whack-a-Risk maps directly to post-sales triage: signals surface, you act on at-risk accounts, Quivly drafts the save — mirrors landing copy 'Act, with the draft already written'."
+      "productFit": "Whack-a-Risk + stack rail gamifies Connect→Act: integrations unlock signal chips, multi-source cards teach 'Quivly sees more when your stack is connected', deploy mirrors draft grounded in signals."
     },
     "selectedPremise": {
       "id": "signal-triage",
       "title": "Signal Triage",
       "subtitle": "Whack-a-Risk",
-      "oneLiner": "At-risk accounts keep surfacing. Deploy Quivly before churn gets there first.",
+      "oneLiner": "Connect your stack. Surface every signal — market to CRM. Deploy before renewal day.",
       "arcSeconds": 90,
       "arc": [
-        {"beat": "open", "copy": "Renewal day in 90 seconds. Signals incoming.", "duration": "0-3s"},
-        {"beat": "play", "copy": "Account cards pop with ARR, health score, usage delta — ignore green, tap red, bonus on yellow", "duration": "3-87s"},
-        {"beat": "deploy", "copy": "Indigo pulse + '+ARR Saved' + 'Draft ready'", "duration": "on each correct tap"},
-        {"beat": "close", "copy": "Rank title + 'See how Quivly does this for real → quivly.ai'", "duration": "87-90s"}
+        {"beat": "connect", "copy": "Stack scattered? Watch pipes light up — Salesforce, Gong, Stripe, Zendesk, Slack, Market.", "duration": "0-10s"},
+        {"beat": "surface", "copy": "Signals you never saw alone now surface on one card — CRM dip + support spike + market layoffs, unified.", "duration": "10-85s"},
+        {"beat": "deploy", "copy": "Tap Full Stack Signal cards for max ARR — Quivly drafts the save grounded in every source.", "duration": "on each correct tap"},
+        {"beat": "close", "copy": "Stack coverage % + signals surfaced + rank — 'Every signal. One place. → quivly.ai'", "duration": "85-90s"}
       ],
-      "protagonist": "Post-sales lead drowning in signals — one tap from Quivly backup",
-      "setting": "Quivly command board — dark SaaS UI, cards pop from signal queue",
-      "conflict": "Red accounts surface constantly; miss one = churn tick",
-      "stakes": "Save ARR before renewal timer hits zero",
-      "resolution": "Every deploy shows draft-ready action — Quivly wrote the save",
+      "protagonist": "Post-sales lead with a scattered stack — Quivly Connect makes every signal visible",
+      "setting": "Quivly command board with live stack rail (left) feeding unified signal queue (center)",
+      "conflict": "Siloed tools hide churn until renewal week; only connected stack surfaces the real risks",
+      "stakes": "Save ARR before timer hits zero — miss a multi-source signal = bigger churn tick",
+      "resolution": "Quivly ingests stack end-to-end, scores health, drafts action grounded in the signals that surfaced it",
       "productMapping": {
-        "connect": "Wave intro — CRM, usage, support signals flood the board",
-        "see": "Each card shows account name, ARR, health score, week-over-week usage delta",
-        "score": "Card border color = health (green healthy, amber medium, red at-risk)",
-        "act": "Tap Deploy → indigo flash, '+$49K ARR Saved', 'Draft ready' floater"
+        "connect": "Stack rail animates — pipe CRM, usage, revenue, calls, support, market data into one profile",
+        "see": "Customer 360 card with timeline chips: which source surfaced usage decline, support spike, market event",
+        "score": "Health border + source chip count — market signal chip (purple) boosts priority",
+        "act": "Deploy → '+ARR Saved' + 'Draft ready — grounded in [Gong + Stripe + Market]'"
       }
+    }
+  },
+  "signalStack": {
+    "headline": "Every signal. One place. — gamified end-to-end",
+    "problem": "Post-sales signals live in silos. CRM says healthy. Usage says otherwise. Market news hits LinkedIn before your CSM sees it.",
+    "quivlyAnswer": "Quivly Connect pipes your entire post-sales stack into one live profile per account — then surfaces churn and expansion signals you'd miss in any single tool.",
+    "landingAnchor": "Quivly ingests signals from your entire post-sales stack and autonomously acts on churn risks and expansion opportunities.",
+    "integrations": [
+      {"id": "crm", "name": "Salesforce", "icon": "logos/sources/salesforce", "unlocks": "contract value, renewal date, contacts", "gameChip": "CRM"},
+      {"id": "calls", "name": "Gong", "icon": "logos/sources/gong", "unlocks": "call sentiment, champion risk, competitor mentions", "gameChip": "Calls"},
+      {"id": "revenue", "name": "Stripe", "icon": "logos/sources/stripe", "unlocks": "payment decline, expansion MRR, overdue invoices", "gameChip": "Revenue"},
+      {"id": "support", "name": "Zendesk", "icon": "logos/sources/zendesk", "unlocks": "ticket spike, CSAT drop, escalation pattern", "gameChip": "Support"},
+      {"id": "comms", "name": "Slack", "icon": "logos/sources/slack", "unlocks": "internal churn chatter, exec sponsor gone quiet", "gameChip": "Comms"},
+      {"id": "market", "name": "Market Signals", "icon": "logos/sources/linkedin", "unlocks": "layoffs, funding, job changes, competitor wins — external context CRM never has", "gameChip": "Market"}
+    ],
+    "gamification": {
+      "connectPhase": {
+        "durationSeconds": 10,
+        "mechanic": "Stack rail fills left-to-right; each integration lights indigo and unlocks its chip type on incoming cards",
+        "copy": "Connecting your stack…",
+        "withoutQuivly": "First 3s show grey silo icons — only single-source cards spawn (easy to miss real risk)",
+        "withQuivly": "After connect, multi-source and market-signal cards appear — teaches 'more integrations = more signal surface area'"
+      },
+      "surfacePhase": {
+        "cardTypes": [
+          {"type": "single-source", "chips": 1, "arrMultiplier": 1, "example": "Stripe: payment failed"},
+          {"type": "stack-signal", "chips": 2, "arrMultiplier": 1.5, "example": "Gong sentiment down + Zendesk ticket spike"},
+          {"type": "full-stack", "chips": 3, "arrMultiplier": 2, "example": "CRM renewal overdue + usage -42% + market layoffs"},
+          {"type": "market-boost", "chips": "any+market", "arrMultiplier": 2.5, "example": "LinkedIn: champion left + usage decline — purple Market chip"}
+        ],
+        "priorityRule": "Deploy red cards with most chips first — mirrors Quivly ranking next best action from combined signals"
+      },
+      "scoring": {
+        "primary": "ARR Saved",
+        "secondary": "Signals Surfaced (unique chip types caught)",
+        "endCard": "Stack Coverage % (integrations active this run)"
+      },
+      "whyItMakesQuivlyStronger": "Player feels the before/after: siloed stack = blind spots; connected stack = risks surface earlier with context — exactly Quivly's Connect→See→Score→Act promise"
     }
   },
   "premise": {
     "selectedOption": "signal-triage",
-    "hook": "Renewal week. At-risk accounts keep surfacing faster than your team can triage.",
-    "protagonist": "Player = post-sales lead drowning in signals — one tap away from Quivly backup.",
-    "setting": "Quivly command board — dark SaaS UI, account cards pop from a signal queue (not a 3D arena).",
-    "conflict": "Red accounts pop up constantly. Ignore healthy ones. Miss at-risk = churn.",
-    "stakes": "Save ARR before the 90-second renewal timer hits zero.",
-    "resolution": "Every deploy shows 'Draft ready' — Quivly already wrote the save.",
-    "whyItMatters": "Mirrors real Quivly: surface risk, act with the draft already written.",
+    "hook": "Renewal week. Your stack is scattered — CRM, usage, support, market signals in different tools. Quivly Connect pulls it together. Now the risks surface.",
+    "protagonist": "Player = post-sales lead who only sees siloed signals until Quivly unifies the stack.",
+    "setting": "Quivly command board — stack rail (left) pipes into unified signal queue (center).",
+    "conflict": "Single-source view misses churn; multi-source Full Stack Signals need fast deploy before renewal.",
+    "stakes": "Save ARR before timer hits zero — miss a market-boosted signal = bigger churn penalty.",
+    "resolution": "Quivly surfaces signals end-to-end (integrated data + external market) and drafts the save grounded in every source.",
+    "whyItMatters": "Gamifies Quivly's moat: more connected stack → more signals surfaced → faster action with context.",
     "storyBeats": [
-      "Open: 'Renewal day in 90 seconds. Signals incoming.'",
-      "Play: Account cards pop — ARR, health score, usage delta visible",
-      "Deploy: Indigo pulse + '+$49K ARR Saved' + 'Draft ready'",
-      "Close: Rank title + 'See how Quivly does this for real →'"
+      "Connect: Stack rail lights up — Salesforce, Gong, Stripe, Zendesk, Slack, Market pipe in",
+      "Surface: Cards pop with source chips + health score — 1 chip (silo blind spot) vs 3+ chips (Full Stack Signal)",
+      "Deploy: Tap red multi-chip cards — '+ARR' + 'Draft ready — grounded in Gong + Market'",
+      "Close: Stack coverage % + signals surfaced + rank + 'Every signal. One place. → quivly.ai'"
     ],
     "previousDirection": {
       "note": "Unreal FPS arena — kept for learning, not primary ship target",
@@ -247,21 +285,29 @@
   },
   "pillars": [
     "60–90 second runs — booth-friendly, no download",
-    "One mechanic: tap to deploy on at-risk accounts",
-    "Product metaphor in 5 seconds (PagerTron / Wizlympics bar)",
-    "Shareable score card — ARR saved + rank title",
+    "One mechanic: tap to deploy — but cards teach stack → surface → act",
+    "Product metaphor in 5 seconds: scattered stack → connected → signals surface",
+    "Score = ARR saved + signals surfaced + stack coverage %",
+    "Shareable end card — 'I connected 6 sources and saved $X ARR'",
     "Browser-first; Unreal stays as Game Lab learning sandbox"
   ],
   "gameplayLoop": {
     "durationSeconds": 90,
     "input": "Click / tap (one button — spacebar optional)",
+    "phases": [
+      {"name": "connect", "seconds": "0-10", "action": "Stack rail fills — 6 integrations light up sequentially"},
+      {"name": "surface-and-act", "seconds": "10-90", "action": "Cards pop with source chips; tap at-risk to deploy"}
+    ],
     "steps": [
-      "Timer starts — Renewal countdown",
-      "Account cards pop from signal queue: 🟢 Healthy (ignore), 🔴 At-risk (tap Deploy), 🟡 Expansion (tap for bonus ARR)",
-      "Deploy = indigo flash + chime + '+ARR Saved' + 'Draft ready' floater",
-      "Tap healthy or miss at-risk = churn tick (health bar drops)",
-      "Speed increases every 15 seconds",
-      "End screen: total ARR saved, accounts rescued, streak, rank title"
+      "Timer starts — 90s renewal countdown",
+      "0-10s Connect phase — stack icons pipe into Quivly (grey silos → indigo connected)",
+      "10s+ Cards pop with 1-4 source chips (CRM, Calls, Revenue, Support, Comms, Market)",
+      "🟢 Healthy single-source — ignore | 🔴 At-risk — tap Deploy | 🟡 Expansion — bonus ARR",
+      "🔴+2 chips = Full Stack Signal — 2× ARR | 🔴+Market chip = 2.5× ARR (external signal boost)",
+      "Deploy = indigo pulse + '+ARR' + 'Draft ready — grounded in [sources]'",
+      "Miss multi-chip at-risk = double churn tick (you had the signal, missed the act)",
+      "Speed ramps every 15s as more integrations stay connected",
+      "End screen: ARR saved, signals surfaced count, stack coverage %, rank title"
     ]
   },
   "acts": [
@@ -278,10 +324,11 @@
       "platform": "browser (Game Lab → quivly.ai embed)",
       "duration": "90s",
       "beats": [
-        "Title: QUIVLY — Renewal Rush · Press to start",
-        "Signal queue animates — cards pop at random holes/slots",
-        "HUD: timer + ARR saved + streak + mini health bar",
-        "End card: score breakdown + rank + share + Book a demo CTA"
+        "Title: QUIVLY — Renewal Rush · Every signal. One place.",
+        "Connect: stack rail animates — 6 source icons light indigo",
+        "Surface: cards pop with chip row (CRM/Calls/Revenue/Support/Comms/Market)",
+        "HUD: timer + ARR saved + signals surfaced + stack coverage ring",
+        "End card: stack coverage % + ARR + rank + Book a demo CTA"
       ]
     }
   ],
@@ -298,8 +345,12 @@
     }
   ],
   "uiCopy": {
-    "start": "Renewal day in 90 seconds. Deploy your agents.",
-    "startAlt": "Every signal. One place. 90 seconds to act.",
+    "start": "Connect your stack. 90 seconds to surface every signal.",
+    "startAlt": "Every signal. One place. From market to CRM — act before renewal day.",
+    "connectPhase": "Connecting your stack…",
+    "stackConnected": "Stack live — signals surfacing",
+    "fullStackSignal": "Full Stack Signal",
+    "marketBoost": "Market signal detected",
     "win": "You saved the quarter.",
     "winAlt": "ARR secured — your post-sales team, without the headcount.",
     "lose": "Churn got there first.",
@@ -310,7 +361,9 @@
       "timer": "Renewal",
       "score": "ARR Saved",
       "streak": "Actions",
-      "health": "Health Score"
+      "health": "Health Score",
+      "signalsSurfaced": "Signals Surfaced",
+      "stackCoverage": "Stack Coverage"
     },
     "floaterSaved": "+ARR",
     "floaterRisk": "At Risk",
@@ -325,9 +378,11 @@
   "buildPlan": {
     "primary": [
       "Prototype Signal Triage in game-lab/index.html (canvas)",
-      "Account card component: logo, ARR, health score, usage delta",
-      "Spawn logic: weighted red > amber > green; speed ramp",
-      "Score + streak + rank titles",
+      "Stack rail component: 6 integrations light up in Connect phase (0-10s)",
+      "Account card: ARR, health, usage delta + source chip row (CRM/Calls/Revenue/Support/Comms/Market)",
+      "Spawn logic: chip count scales with elapsed time; market chips after stack connected",
+      "Multipliers: 1 chip = 1×, 2+ = Full Stack 2×, +Market = 2.5× ARR",
+      "Score: ARR + signals surfaced + stack coverage % + rank titles",
       "End screen + share screenshot + quivly.ai CTA"
     ],
     "phase2": [
@@ -346,7 +401,7 @@
   ],
   "lockedDecisions": [
     "Title: Renewal Rush (confirmed)",
-    "Premise: Signal Triage / Whack-a-Risk (confirmed)",
+    "Premise: Signal Triage + Stack Connect narrative (confirmed)",
     "Platform: browser-first — Game Lab canvas → quivly.ai embed (confirmed)",
     "Unreal FPS arena: learning sandbox only, not marketing ship target (confirmed)",
     "Priority: premium dark SaaS look — Stripe meets arcade glow, not military shooter",
@@ -375,16 +430,18 @@
       "source": "quivly.ai landing + quivly-app globals.css"
     },
     "gameplayMapping": {
-      "connect": "Round start — signal icons flood the board from CRM, usage, support",
-      "see": "Each popped card shows Customer 360: account name, ARR, contacts, usage delta",
-      "score": "Card border color = health score (green / amber / red)",
-      "act": "Tap Deploy on at-risk cards — Actions Feed style '+ARR Saved' + 'Draft ready'"
+      "connect": "Left stack rail — Salesforce, Gong, Stripe, Zendesk, Slack, Market animate into Quivly hub",
+      "see": "Customer 360 card with chip row showing which sources surfaced the risk",
+      "score": "Health border + chip count; purple Market chip = external signal priority",
+      "act": "Deploy on multi-chip cards — draft cites sources ('grounded in Gong + Stripe + Market')"
     },
     "world": {
-      "board": "Dark command-center panel with 3×3 or 2×4 card slots, subtle indigo grid",
-      "background": "#0A0A0A with soft radial glow behind active slot",
-      "cards": "Glass account tiles — company initial, ARR pill, health badge, usage sparkline",
-      "spawn": "Cards rise from slot with spring animation — not enemy sprites"
+      "board": "Split layout — stack rail (left 20%) + 3×3 card slots (center) + HUD (top)",
+      "stackRail": "Vertical pipe of 6 source icons; grey → indigo glow as each connects",
+      "background": "#0A0A0A with indigo pulse along connect pipes when stack goes live",
+      "cards": "Glass tiles — company initial, ARR pill, health badge, chip row, usage sparkline",
+      "chips": "Tiny rounded badges per source; Market chip uses purple accent; 3+ chips = gold Full Stack border",
+      "spawn": "Cards rise from slot; early spawns = 1 chip (silo), late spawns = 2-4 chips (connected stack)"
     },
     "feel": {
       "input": "Single click/tap — no movement, no aim",
