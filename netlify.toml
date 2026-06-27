@@ -1,0 +1,19 @@
+# Netlify deploy config for Renewal Rush (Babylon.js + Vite static build).
+# The game lives in the monorepo subdir game-lab/app and builds to dist/ (static).
+[build]
+  base    = "game-lab/app"   # run the build from the game dir
+  command = "bun run build"  # Netlify's build image ships bun; bun.lock triggers it
+  publish = "dist"           # relative to base → game-lab/app/dist
+
+# Long-cache the hashed asset bundles; never cache the entry HTML.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    # Allow embedding the game in an <iframe> on quivly.ai (it's built with base:"./").
+    Content-Security-Policy = "frame-ancestors 'self' https://*.quivly.ai https://quivly.ai"

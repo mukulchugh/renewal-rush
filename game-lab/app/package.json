@@ -1,0 +1,20 @@
+{
+  "name": "renewal-rush",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Renewal Rush — Quivly's embeddable browser FPS. Deploy AI agents to neutralize churn signals and save at-risk accounts before renewal day.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "@babylonjs/core": "^8.56.0",
+    "@babylonjs/loaders": "^8.56.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}

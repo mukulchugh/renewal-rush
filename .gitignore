@@ -39,3 +39,9 @@ game-lab/assets/*-capture.txt
 
 # Local editor noise — keep Config/ defaults, ignore machine-specific saved overrides
 # Saved/ is already ignored above
+
+# Web game (Vite + Bun) — deps + build output build on Netlify, never commit
+node_modules/
+game-lab/app/dist/
+.envrc
+.gstack/

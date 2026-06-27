@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Renewal Rush — Quivly</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=IBM+Plex+Mono:wght@500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root { --accent: #6366f1; --bg: #0a0a0a; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
+      body { font-family: Inter, system-ui, sans-serif; color: #fafafa; }
+      #game {
+        position: fixed; inset: 0; width: 100%; height: 100%;
+        display: block; outline: none; touch-action: none; background: var(--bg);
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="game" tabindex="0"></canvas>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
