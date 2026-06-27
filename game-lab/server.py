@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -104,10 +105,11 @@ def game_lab_is_up(port: int) -> bool:
 
 def stop_port_listeners(port: int) -> list[int]:
     killed: list[int] = []
+    me = os.getpid()
     for pid in pids_on_port(port):
-        if pid == 0:
+        if pid == me:
             continue
-        for sig in ("TERM", "KILL"):
+        for sig in (15, 9):
             try:
                 subprocess.run(["kill", f"-{sig}", str(pid)], check=True, capture_output=True)
                 killed.append(pid)
@@ -115,20 +117,26 @@ def stop_port_listeners(port: int) -> list[int]:
             except subprocess.CalledProcessError:
                 continue
     if killed:
-        time.sleep(0.3)
-    return killed
+        time.sleep(0.35)
+    return list(dict.fromkeys(killed))
 
 
-def bind_server(port: int) -> ReuseHTTPServer:
-    return ReuseHTTPServer(("127.0.0.1", port), Handler)
+def free_port(port: int, attempts: int = 6) -> list[int]:
+    all_killed: list[int] = []
+    for _ in range(attempts):
+        killed = stop_port_listeners(port)
+        all_killed.extend(killed)
+        if not pids_on_port(port):
+            break
+        time.sleep(0.15)
+    return list(dict.fromkeys(all_killed))
 
 
-def serve(port: int) -> None:
-    httpd = bind_server(port)
-    print(f"Game Lab → http://127.0.0.1:{port}")
-    print("Leave this running while you learn and build.")
+def print_running(port: int, pid: int | None = None) -> None:
+    pid_hint = f" (PID {pid})" if pid else ""
+    print(f"Game Lab is already running at http://127.0.0.1:{port}{pid_hint}")
     print(f"Renewal Rush → http://127.0.0.1:{port}/renewal-rush.html")
-    httpd.serve_forever()
+    print("To restart: python3 server.py --restart")
 
 
 def main() -> int:
@@ -143,27 +151,32 @@ def main() -> int:
     port = args.port
 
     if args.restart:
-        stopped = stop_port_listeners(port)
+        stopped = free_port(port)
         if stopped:
             print(f"Stopped previous listener(s) on :{port}: {', '.join(map(str, stopped))}")
+    else:
+        pids = pids_on_port(port)
+        if pids and game_lab_is_up(port):
+            print_running(port, pids[0])
+            return 0
 
     try:
-        bind_server(port)
+        httpd = ReuseHTTPServer(("127.0.0.1", port), Handler)
     except OSError as exc:
-        if exc.errno != 48:  # Address already in use
+        if exc.errno != 48:
             raise
         pids = pids_on_port(port)
-        pid_hint = f" (PID {pids[0]})" if pids else ""
         if game_lab_is_up(port):
-            print(f"Game Lab is already running at http://127.0.0.1:{port}{pid_hint}")
-            print(f"Renewal Rush → http://127.0.0.1:{port}/renewal-rush.html")
-            print("To restart: python3 server.py --restart")
+            print_running(port, pids[0] if pids else None)
             return 0
-        print(f"Port {port} is in use{pid_hint} but is not Game Lab.", file=sys.stderr)
-        print("Free the port or run: python3 server.py --restart", file=sys.stderr)
+        print(f"Port {port} is in use (PID {pids[0] if pids else '?'}) but is not Game Lab.", file=sys.stderr)
+        print("Run: python3 server.py --restart", file=sys.stderr)
         return 1
 
-    serve(port)
+    print(f"Game Lab → http://127.0.0.1:{port}")
+    print("Leave this running while you learn and build.")
+    print(f"Renewal Rush → http://127.0.0.1:{port}/renewal-rush.html")
+    httpd.serve_forever()
     return 0
 
 
