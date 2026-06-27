@@ -112,14 +112,54 @@
     }
     .floater.bad { color: var(--red); }
     .floater.gold { color: var(--gold); }
+    .floater.combo { color: var(--gold); font-size: 1rem; font-weight: 600; }
     @keyframes float-up { to { opacity: 0; transform: translateY(-48px) scale(1.05); } }
+    .callout {
+      position: fixed; left: 50%; top: 36%; transform: translateX(-50%);
+      font-weight: 800; font-size: clamp(1.4rem, 4vw, 2rem); letter-spacing: -0.03em;
+      color: var(--gold); opacity: 0; pointer-events: none; z-index: 6;
+      text-shadow: 0 4px 32px #000, 0 0 40px #6366f144;
+      white-space: nowrap;
+    }
+    .callout.show { animation: callout-pop 1.3s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+    @keyframes callout-pop {
+      0% { opacity: 0; transform: translateX(-50%) scale(0.5); }
+      12% { opacity: 1; transform: translateX(-50%) scale(1.12); }
+      65% { opacity: 1; transform: translateX(-50%) scale(1); }
+      100% { opacity: 0; transform: translateX(-50%) scale(1.04) translateY(-28px); }
+    }
+    .vignette {
+      position: fixed; inset: 0; pointer-events: none; z-index: 1;
+      background: radial-gradient(ellipse at center, transparent 42%, #f8717122 100%);
+      opacity: 0; transition: opacity 0.25s;
+    }
+    .vignette.danger { opacity: 1; }
+    .vignette.rush {
+      background: radial-gradient(ellipse at center, transparent 38%, #6366f133 100%);
+      opacity: 1; animation: rush-pulse 1.2s ease infinite;
+    }
+    @keyframes rush-pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+    .pill.streak { border-color: #fbbf2444; }
+    .pill.streak.hot { border-color: var(--gold); animation: pulse-border 0.5s ease infinite; }
+    .pill.streak strong { color: var(--gold); }
+    .shake { animation: shake 0.35s ease; }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-6px); }
+      40% { transform: translateX(6px); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(4px); }
+    }
+    .best { font-size: 0.75rem; color: var(--gold); margin-top: 8px; }
     a.back { position: fixed; bottom: 12px; left: 12px; font-size: 0.7rem; color: #555; z-index: 5; text-decoration: none; }
     a.back:hover { color: var(--muted); }
   </style>
 </head>
 <body>
   <canvas id="canvas"></canvas>
+  <div class="vignette" id="vignette"></div>
   <div class="flash" id="flash"></div>
+  <div class="callout" id="callout"></div>
   <div class="crosshair" id="crosshair"></div>
   <div class="hud" id="hud" style="visibility:hidden">
     <div class="hud-top">
@@ -132,6 +172,7 @@
         <div class="pill" id="pill-arr">ARR <strong id="t-arr">$0</strong></div>
         <div class="pill" id="pill-sig">Signals <strong id="t-sig">0</strong></div>
         <div class="pill" id="pill-stack">Stack <strong id="t-stack">0%</strong></div>
+        <div class="pill streak" id="pill-streak" style="display:none">Streak <strong id="t-streak">0</strong>×</div>
       </div>
     </div>
     <div class="banner" id="banner">Click to aim · Left-click deploy Agent Pulse</div>
@@ -157,6 +198,7 @@
       <h2 id="end-title">You saved the quarter.</h2>
       <p id="end-rank" style="color:var(--gold);font-weight:600"></p>
       <p id="end-stats" style="font-family:monospace;font-size:0.85rem;color:var(--muted)"></p>
+      <p class="best" id="end-best"></p>
       <button class="btn" id="replay">Play again</button>
     </div>
   </div>
@@ -168,7 +210,9 @@
     import * as THREE from "three";
 
     const INTEGRATIONS = ["CRM", "Calls", "Revenue", "Support", "Comms", "Market"];
+    const CHIP_LABELS = ["CRM", "Gong", "Stripe", "Zendesk", "Slack", "Market"];
     const COMPANIES = ["Vertex Labs", "CloudNine", "DataForge", "Pulse AI", "Stackline", "Northbeam"];
+    const BEST_KEY = "renewal-rush-best-arr";
     const CONNECT_MS = 10000;
     const GAME_MS = 90000;
     const MAX_ORBS = 9;
@@ -190,7 +234,7 @@
     let intervals = [];
     let hoverOrb = null;
     let audioCtx = null;
-    let lastHud = { arr: 0, sig: 0, timer: 90 };
+    let lastHud = { arr: 0, sig: 0, timer: 90, streak: 0 };
 
     const reusable = {
       dir: new THREE.Vector3(),
@@ -251,10 +295,46 @@
     }
 
     function sfxConnect() { tone(520, 0.12, "sine", 0.06, 180); }
-    function sfxDeploy() { tone(880, 0.08, "triangle", 0.09, 400); tone(1320, 0.06, "sine", 0.04); }
+    function sfxDeploy(streak = 1) {
+      const base = 720 + Math.min(streak, 8) * 40;
+      tone(base, 0.07, "triangle", 0.09, 350);
+      tone(base * 1.5, 0.05, "sine", 0.05);
+      if (streak >= 3) tone(base * 2, 0.04, "sine", 0.04);
+    }
+    function sfxCombo(streak) { tone(440 + streak * 60, 0.15, "square", 0.06, 200); }
     function sfxMiss() { tone(180, 0.2, "sawtooth", 0.05, -60); }
     function sfxWrong() { tone(300, 0.15, "square", 0.04, -80); }
     function sfxEnd(ok) { tone(ok ? 660 : 220, 0.35, "sine", 0.07, ok ? 200 : -40); }
+    function sfxRush() { tone(110, 0.05, "sine", 0.03); }
+
+    function showCallout(text) {
+      const el = $("callout");
+      el.textContent = text;
+      el.classList.remove("show");
+      void el.offsetWidth;
+      el.classList.add("show");
+    }
+
+    function shake() {
+      $("hud").classList.add("shake");
+      setTimeout(() => $("hud").classList.remove("shake"), 350);
+      state.shake = 0.04;
+    }
+
+    function streakMult() {
+      if (state.streak < 3) return 1;
+      if (state.streak < 5) return 1.15;
+      if (state.streak < 8) return 1.3;
+      return 1.5;
+    }
+
+    function chipMultiplier(chipCount, hasMarket) {
+      let m = 1;
+      if (chipCount >= 3) m = 2;
+      else if (chipCount >= 2) m = 1.5;
+      if (hasMarket) m = Math.max(m, 2.5);
+      return m;
+    }
 
     function initThree() {
       const canvas = $("canvas");
@@ -354,7 +434,12 @@
         vel: new THREE.Vector3(),
         bob: 0,
         kick: 0,
+        shake: 0,
         fov: 68,
+        streak: 0,
+        bestStreak: 0,
+        rushMode: false,
+        lastRushTick: 0,
       };
       orbs.forEach(removeOrb);
       orbs = [];
@@ -362,6 +447,9 @@
       pulses = [];
       hoverOrb = null;
       $("crosshair").className = "crosshair";
+      $("vignette").className = "vignette";
+      $("pill-streak").style.display = "none";
+      $("pill-streak").classList.remove("hot");
     }
 
     function stackPct() { return Math.round((state.connected / INTEGRATIONS.length) * 100); }
@@ -390,14 +478,28 @@
       if (state.arr !== lastHud.arr) { lastHud.arr = state.arr; popPill("pill-arr"); }
       if (state.signals.size !== lastHud.sig) { lastHud.sig = state.signals.size; popPill("pill-sig"); }
 
+      const streakEl = $("pill-streak");
+      if (state.streak >= 2) {
+        streakEl.style.display = "";
+        $("t-streak").textContent = state.streak;
+        streakEl.classList.toggle("hot", state.streak >= 5);
+        if (state.streak >= 3 && state.streak !== lastHud.streak) popPill("pill-streak");
+      } else {
+        streakEl.style.display = "none";
+      }
+      lastHud.streak = state.streak;
+
       const b = $("banner");
       if (!state.connectDone) {
         b.textContent = `Connecting stack… ${stackPct()}%`;
         b.classList.add("active");
       } else if (hoverOrb) {
-        const tag = hoverOrb.status === "at-risk" ? "🔴 at-risk" : hoverOrb.status === "expansion" ? "🟡 expansion" : "🟢 healthy";
-        b.textContent = `${hoverOrb.company} · ${tag} · ${hoverOrb.chipCount} signal${hoverOrb.chipCount > 1 ? "s" : ""}`;
-        b.classList.toggle("active", hoverOrb.status === "at-risk");
+        const tag = hoverOrb.critical ? "⚡ CRITICAL"
+          : hoverOrb.status === "at-risk" ? "🔴 at-risk"
+          : hoverOrb.status === "expansion" ? "🟡 expansion" : "🟢 healthy";
+        const chips = hoverOrb.chipLabels.join(" · ");
+        b.textContent = `${hoverOrb.company} · ${tag} · ${chips}`;
+        b.classList.toggle("active", hoverOrb.status === "at-risk" || hoverOrb.critical);
       } else {
         b.textContent = "Aim at 🔴 at-risk orbs · Left-click Agent Pulse";
         b.classList.remove("active");
@@ -415,6 +517,12 @@
       state.connected++;
       sfxConnect();
       popPill("pill-stack");
+      if (state.connected === INTEGRATIONS.length) {
+        showCallout("STACK LIVE!");
+        spawnPulse(mesh.position, COLORS.accent);
+      } else {
+        showFloater(`${INTEGRATIONS[i]} connected`);
+      }
       updateHud();
     }
 
@@ -426,18 +534,39 @@
       if (statusRoll < 0.28 + state.connected * 0.015) status = "at-risk";
       else if (statusRoll < 0.42) status = "expansion";
 
-      const chipCount = state.connectDone
-        ? Math.min(3, 1 + (Math.random() < 0.45 ? 1 : 0) + (Math.random() < 0.22 ? 1 : 0))
-        : 1;
-      const color = status === "healthy" ? COLORS.healthy : status === "expansion" ? COLORS.expansion : COLORS.atRisk;
-      const geo = orbGeo[Math.min(chipCount - 1, 2)];
+      const elapsed = Date.now() - state.startedAt;
+      let chipCount = 1;
+      if (state.connectDone) {
+        chipCount = 1 + (Math.random() < 0.42 ? 1 : 0) + (elapsed > 40000 && Math.random() < 0.3 ? 1 : 0);
+        chipCount = Math.min(3, chipCount);
+      }
+      const hasMarket = state.connectDone && status === "at-risk" && state.connected >= 5 && Math.random() < 0.32;
+      if (hasMarket) chipCount = Math.max(chipCount, 2);
 
-      const mesh = new THREE.Mesh(geo, matFor(color));
+      const chipLabels = [];
+      const pool = CHIP_LABELS.slice(0, state.connected).sort(() => Math.random() - 0.5);
+      for (let c = 0; c < chipCount; c++) chipLabels.push(pool[c] || CHIP_LABELS[c]);
+      if (hasMarket && !chipLabels.includes("Market")) chipLabels.push("Market");
+
+      const critical = status === "at-risk" && Math.random() < 0.12 + (state.rushMode ? 0.08 : 0);
+      const color = status === "healthy" ? COLORS.healthy : status === "expansion" ? COLORS.expansion : COLORS.atRisk;
+      const geo = orbGeo[Math.min(chipLabels.length - 1, 2)];
+
+      const mesh = new THREE.Mesh(geo, matFor(color, critical ? 1 : 0.94));
       const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
-        color, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending,
+        color: critical ? COLORS.market : color, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending,
       }));
       ring.rotation.x = Math.PI / 2;
       mesh.add(ring);
+
+      const satellites = [];
+      const satGeo = new THREE.SphereGeometry(0.06, 8, 8);
+      chipLabels.forEach((_, ci) => {
+        const sat = new THREE.Mesh(satGeo, matFor(COLORS.accent, 0.9));
+        sat.userData.orbit = ci * (Math.PI * 2 / chipLabels.length);
+        mesh.add(sat);
+        satellites.push(sat);
+      });
 
       const angle = Math.random() * Math.PI * 2;
       const dist = 3.5 + Math.random() * 4.5;
@@ -452,10 +581,11 @@
       scene.add(light);
 
       const company = COMPANIES[Math.floor(Math.random() * COMPANIES.length)];
-      const arr = 18000 + Math.random() * 42000;
+      const arr = (18000 + Math.random() * 42000) * (critical ? 1.35 : 1);
       const orb = {
-        mesh, ring, light, status, chipCount, company, arr,
-        born: performance.now(), ttl: 3200 + Math.random() * 2200,
+        mesh, ring, light, satellites, status, chipCount: chipLabels.length,
+        chipLabels, hasMarket: chipLabels.includes("Market"), critical, company, arr,
+        born: performance.now(), ttl: (critical ? 2400 : 3200) + Math.random() * 2000,
         bob: Math.random() * Math.PI * 2,
         spawnT: 0,
         baseY: y,
@@ -511,8 +641,10 @@
 
       if (orb.status === "healthy") {
         state.churn = Math.max(0, state.churn - 5);
+        state.streak = 0;
         showFloater("Wrong tag — healthy account", "bad");
         sfxWrong();
+        shake();
         spawnPulse(orb.mesh.position, COLORS.healthy);
         removeOrb(orb);
         updateHud();
@@ -520,20 +652,29 @@
         return;
       }
 
-      let mult = orb.chipCount >= 3 ? 2 : orb.chipCount >= 2 ? 1.5 : 1;
-      const marketBoost = orb.chipCount >= 2 && Math.random() < 0.28;
-      if (marketBoost) mult = 2.5;
-
-      const saved = Math.round(orb.arr * mult * (orb.status === "expansion" ? 0.65 : 1));
+      let mult = chipMultiplier(orb.chipCount, orb.hasMarket);
+      const combo = streakMult();
+      const saved = Math.round(orb.arr * mult * combo * (orb.status === "expansion" ? 0.65 : 1));
       state.arr += saved;
-      if (orb.status === "at-risk") state.rescued++;
-      state.signals.add(orb.chipCount);
+      if (orb.status === "at-risk") {
+        state.rescued++;
+        state.streak++;
+        state.bestStreak = Math.max(state.bestStreak, state.streak);
+      }
+      orb.chipLabels.forEach((c) => state.signals.add(c));
 
-      const label = marketBoost ? `+${fmt(saved)} · Full Stack draft` : `+${fmt(saved)} · Draft ready`;
-      showFloater(label, marketBoost ? "gold" : "");
-      sfxDeploy();
+      if (orb.hasMarket || orb.chipCount >= 3) showCallout(orb.hasMarket ? "MARKET BOOST!" : "FULL STACK!");
+      else if (state.streak >= 5) showCallout(`${state.streak}× RESCUE STREAK!`);
+      else if (orb.critical) showCallout("CRITICAL SAVE!");
+      else if (state.streak >= 3) { showFloater(`${state.streak}× combo!`, "combo"); sfxCombo(state.streak); }
+
+      const src = orb.chipLabels.filter((c) => c !== "Market").slice(0, 2).join(" + ");
+      showFloater(`+${fmt(saved)}${combo > 1 ? ` · ${combo}× streak` : ""}`, mult >= 2 ? "gold" : "");
+      showFloater(`Draft ready — ${src}${orb.hasMarket ? " + Market" : ""}`);
+      sfxDeploy(state.streak);
       flash();
-      spawnPulse(orb.mesh.position, marketBoost ? COLORS.market : COLORS.accent);
+      state.kick = orb.critical ? 0.1 : 0.06;
+      spawnPulse(orb.mesh.position, orb.hasMarket ? COLORS.market : COLORS.accent);
       removeOrb(orb);
       updateHud();
     }
@@ -543,8 +684,11 @@
       if (orb.status === "at-risk") {
         const mult = orb.chipCount >= 2 ? 2 : 1;
         state.churn = Math.max(0, state.churn - 4 * mult);
-        showFloater("Missed at-risk signal!", "bad");
+        state.streak = 0;
+        showFloater(orb.critical ? "CRITICAL signal lost!" : "Missed at-risk signal!", "bad");
+        if (orb.critical) showCallout("SIGNAL LOST!");
         sfxMiss();
+        shake();
         if (state.churn <= 0) endGame(false);
       }
       removeOrb(orb);
@@ -586,7 +730,17 @@
       $("end-title").textContent = ok || state.churn > 0 ? "You saved the quarter." : "Churn got there first.";
       const rank = state.arr >= 200000 ? "Chief Renewal Officer" : state.arr >= 80000 ? "CSM Speedrunner" : "Renewal Rookie";
       $("end-rank").textContent = rank;
-      $("end-stats").textContent = `${fmt(state.arr)} saved · ${state.signals.size} signals · ${stackPct()}% stack · ${state.rescued} rescued`;
+      $("end-stats").textContent = `${fmt(state.arr)} saved · ${state.signals.size} signals · ${stackPct()}% stack · ${state.rescued} rescued · best streak ${state.bestStreak || state.streak}`;
+      const prev = Number(localStorage.getItem(BEST_KEY) || 0);
+      const bestEl = $("end-best");
+      if (state.arr > prev) {
+        localStorage.setItem(BEST_KEY, String(state.arr));
+        bestEl.textContent = "New personal best!";
+      } else if (prev > 0) {
+        bestEl.textContent = `Personal best: ${fmt(prev)}`;
+      } else {
+        bestEl.textContent = "";
+      }
       $("end").classList.remove("hidden");
     }
 
@@ -605,7 +759,16 @@
       INTEGRATIONS.forEach((_, i) => {
         timeouts.push(setTimeout(() => connectStack(i), (CONNECT_MS / INTEGRATIONS.length) * i + 400));
       });
-      timeouts.push(setTimeout(() => { state.connectDone = true; updateHud(); }, CONNECT_MS));
+      timeouts.push(setTimeout(() => {
+        state.connectDone = true;
+        showCallout("SIGNALS INCOMING");
+        updateHud();
+      }, CONNECT_MS));
+      timeouts.push(setTimeout(() => {
+        state.rushMode = true;
+        showCallout("RENEWAL RUSH!");
+        $("vignette").classList.add("rush");
+      }, GAME_MS - 30000));
       timeouts.push(setTimeout(() => endGame(true), GAME_MS));
 
       canvas.requestPointerLock();
@@ -646,11 +809,16 @@
       const bobY = Math.sin(state.bob) * 0.025 * Math.min(1, speed / 3);
 
       state.kick *= Math.exp(-12 * dt);
+      state.shake *= Math.exp(-10 * dt);
       camera.fov = state.fov + state.kick * 40;
       camera.updateProjectionMatrix();
 
       camera.position.copy(state.pos);
       camera.position.y += bobY;
+      if (state.shake > 0.001) {
+        camera.position.x += (Math.random() - 0.5) * state.shake;
+        camera.position.y += (Math.random() - 0.5) * state.shake * 0.5;
+      }
       camera.rotation.order = "YXZ";
       camera.rotation.y = state.yaw;
       camera.rotation.x = state.pitch;
@@ -680,26 +848,49 @@
           spawnOrb();
         }
         const elapsed = Date.now() - state.startedAt;
-        state.spawnMs = Math.max(850, 2000 - elapsed * 0.012);
+        const rushBoost = state.rushMode ? 0.55 : 1;
+        state.spawnMs = Math.max(650, (2000 - elapsed * 0.014) * rushBoost);
+        if (state.rushMode && Math.floor(elapsed / 1000) !== state.lastRushTick) {
+          state.lastRushTick = Math.floor(elapsed / 1000);
+          sfxRush();
+        }
         if (Math.floor(elapsed / 200) !== state._lastHudTick) {
           state._lastHudTick = Math.floor(elapsed / 200);
           updateHud();
         }
       }
 
+      let dangerOrbs = 0;
+
       const t = clock.elapsedTime;
       orbs.forEach((orb) => {
+        const age = performance.now() - orb.born;
+        const lifeLeft = 1 - age / orb.ttl;
         orb.spawnT = Math.min(1, orb.spawnT + dt * 5);
         const ease = 1 - Math.pow(1 - orb.spawnT, 3);
-        orb.mesh.scale.setScalar(ease);
-        orb.mesh.position.y = orb.baseY + Math.sin(t * 2.2 + orb.bob) * 0.12;
-        orb.mesh.rotation.y += dt * 1.1;
-        orb.ring.rotation.z += dt * 0.6;
-        const pulse = 0.55 + Math.sin(t * 4 + orb.bob) * 0.15;
+        const urgency = orb.status === "at-risk" && lifeLeft < 0.35 ? 1 + (0.35 - lifeLeft) * 4 : 1;
+        if (orb.status === "at-risk" && lifeLeft < 0.35) dangerOrbs++;
+
+        orb.mesh.scale.setScalar(ease * (orb.critical ? 1.08 : 1));
+        orb.mesh.position.y = orb.baseY + Math.sin(t * (2.2 + urgency) + orb.bob) * (0.12 + urgency * 0.06);
+        orb.mesh.rotation.y += dt * (1.1 + urgency * 0.8);
+        orb.ring.rotation.z += dt * (0.6 + urgency);
+        const pulse = 0.55 + Math.sin(t * (4 + urgency * 3) + orb.bob) * (0.15 + urgency * 0.2);
         orb.ring.material.opacity = pulse;
-        orb.light.intensity = 0.6 + ease * 0.8;
+        orb.ring.scale.setScalar(1 + (urgency - 1) * 0.15);
+        orb.light.intensity = (0.6 + ease * 0.8) * (1 + (urgency - 1) * 0.5);
         orb.light.position.copy(orb.mesh.position);
+
+        orb.satellites.forEach((sat) => {
+          sat.userData.orbit += dt * (1.8 + orb.chipCount * 0.3);
+          const r = 0.55 + orb.chipCount * 0.05;
+          sat.position.set(Math.cos(sat.userData.orbit) * r, Math.sin(sat.userData.orbit * 2) * 0.08, Math.sin(sat.userData.orbit) * r);
+        });
       });
+
+      const vig = $("vignette");
+      if (dangerOrbs > 0 && !state.rushMode) vig.classList.add("danger");
+      else if (!state.rushMode) vig.classList.remove("danger");
 
       stackMeshes.forEach((mesh) => {
         if (mesh.userData.pulse > 0) {

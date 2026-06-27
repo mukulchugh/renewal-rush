@@ -23,7 +23,10 @@ REQUIRED = [
     "MAX_ORBS",
     "powerPreference",
     "AudioContext",
-    "Full Stack draft",
+    "FULL STACK!",
+    "RESCUE STREAK",
+    "renewal-rush-best-arr",
+    "STACK LIVE!",
 ]
 
 
