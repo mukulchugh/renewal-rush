@@ -15,7 +15,7 @@ REQUIRED = [
     "Agent Pulse",
     "Stack Runner",
     "Signal Sniper",
-    "churn drones",
+    "spawnDrone",
     "Nova Pulse",
     "Market Beam",
     "requestPointerLock",
