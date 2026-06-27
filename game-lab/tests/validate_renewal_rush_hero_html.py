@@ -20,6 +20,12 @@ REQUIRED = [
     "Market Beam",
     "requestPointerLock",
     "quivly-logo-forest-white.webp",
+    "WAVE",
+    "runMult",
+    "tryDash",
+    "offerUpgrades",
+    "renewal-rush-hero-best",
+    "Run again",
 ]
 
 

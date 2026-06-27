@@ -67,11 +67,34 @@
     .callout { position: fixed; left: 50%; top: 34%; transform: translateX(-50%); font-weight: 800; font-size: 1.6rem; color: var(--gold); opacity: 0; pointer-events: none; z-index: 6; text-shadow: 0 4px 24px #000; }
     .callout.show { animation: co 1.1s ease forwards; }
     @keyframes co { 0% { opacity: 0; transform: translateX(-50%) scale(0.6); } 15% { opacity: 1; transform: translateX(-50%) scale(1.1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateX(-50%) translateY(-20px); } }
+    .pill.wave strong { color: var(--gold); }
+    .pill.mult strong { color: var(--purple); }
+    .speedlines {
+      position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: 0;
+      background: repeating-linear-gradient(90deg, transparent, transparent 48px, #6366f108 48px, #6366f108 49px);
+      transition: opacity 0.2s;
+    }
+    .speedlines.on { opacity: 1; animation: scroll-lines 0.4s linear infinite; }
+    @keyframes scroll-lines { from { transform: translateX(0); } to { transform: translateX(-49px); } }
+    .lowhp { animation: lowhp 0.5s ease infinite; }
+    @keyframes lowhp { 0%, 100% { box-shadow: inset 0 0 0 0 #f8717100; } 50% { box-shadow: inset 0 0 80px 20px #f8717122; } }
+    .upgrade-overlay { z-index: 15; background: #000e; }
+    .upgrade-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 16px 0; }
+    @media (max-width: 600px) { .upgrade-grid { grid-template-columns: 1fr; } }
+    .upgrade-card {
+      border: 1px solid var(--border); border-radius: 12px; padding: 14px; cursor: pointer;
+      background: #121212; text-align: left; transition: border-color 0.15s, transform 0.15s;
+    }
+    .upgrade-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .upgrade-card .u-title { font-weight: 700; font-size: 0.88rem; margin-bottom: 4px; }
+    .upgrade-card .u-desc { font-size: 0.72rem; color: var(--muted); line-height: 1.45; }
+    .run-meta { font-size: 0.72rem; color: var(--muted); margin-top: 10px; }
     a.back { position: fixed; bottom: 12px; left: 12px; font-size: 0.68rem; color: #555; z-index: 5; text-decoration: none; }
   </style>
 </head>
 <body>
   <canvas id="canvas"></canvas>
+  <div class="speedlines" id="speedlines"></div>
   <div class="hitmark" id="hitmark"></div>
   <div class="callout" id="callout"></div>
   <div class="crosshair" id="crosshair"></div>
@@ -83,7 +106,9 @@
           <div class="hero-tag" id="hero-label">Agent Pulse <span>· CSM</span></div>
         </div>
         <div class="stats">
-          <div class="pill timer" id="pill-timer">Renewal <strong id="t-timer">90</strong>s</div>
+          <div class="pill wave">Wave <strong id="t-wave">1</strong></div>
+          <div class="pill mult">Mult <strong id="t-mult">1.0</strong>×</div>
+          <div class="pill timer" id="pill-timer">Run <strong id="t-timer">90</strong>s</div>
           <div class="pill">ARR <strong id="t-arr">$0</strong></div>
           <div class="pill">Kills <strong id="t-kills">0</strong></div>
           <div class="pill">Streak <strong id="t-streak">0</strong>×</div>
@@ -96,15 +121,15 @@
         <div class="ult-bar"><div class="ult-fill" id="ult-fill" style="width:100%"></div></div>
       </div>
     </div>
-    <div class="banner" id="banner">Left-click fire · E ultimate · Shoot churn drones &amp; at-risk signals</div>
+    <div class="banner" id="banner">Roguelike run — survive waves · pick upgrades · stack your multiplier</div>
   </div>
-  <p class="hint" id="hint">WASD · Mouse · LMB shoot · E ult</p>
+  <p class="hint" id="hint">WASD · LMB · E ult · Shift dash</p>
   <a class="back" href="index.html">← Game Lab</a>
 
   <div class="overlay" id="title">
     <div class="modal wide">
       <div style="text-align:center"><img src="assets/brand/quivly-logo-forest-white.webp" alt="" /><h2>Renewal Rush — Hero Shooter</h2>
-      <p>Pick your Quivly agent. Fight churn drones in the arena. Tag at-risk account signals before renewal day.</p></div>
+      <p>One run, escalating waves, mid-run upgrades. Pick an agent and see how far you survive renewal season.</p></div>
       <div class="hero-grid" id="hero-grid"></div>
       <button class="btn" id="start" disabled>Deploy agent</button>
     </div>
@@ -115,7 +140,16 @@
       <h2 id="end-title">Quarter saved.</h2>
       <p id="end-rank" style="color:var(--gold);font-weight:600"></p>
       <p id="end-stats" style="font-family:monospace;font-size:0.82rem;color:var(--muted)"></p>
-      <button class="btn" id="replay" style="margin-top:16px">Play again</button>
+      <p class="run-meta" id="end-run"></p>
+      <button class="btn" id="replay" style="margin-top:16px">Run again →</button>
+      <p class="run-meta" style="margin-top:12px">Each run escalates · upgrades stack · chase your best ARR</p>
+    </div>
+  </div>
+
+  <div class="overlay upgrade-overlay hidden" id="upgrade-pick">
+    <div class="modal wide">
+      <div style="text-align:center"><h2>Stack upgrade</h2><p>Pick one — your run gets stronger</p></div>
+      <div class="upgrade-grid" id="upgrade-grid"></div>
     </div>
   </div>
 
@@ -132,19 +166,35 @@
     ];
     const COMPANIES = ["Vertex Labs", "CloudNine", "DataForge", "Pulse AI", "Stackline", "Northbeam"];
     const GAME_MS = 90000;
-    const COLORS = { healthy: 0x34d399, atRisk: 0xf87171, expansion: 0xfbbf24, churn: 0xef4444, accent: 0x6366f1 };
-    const MOVE = { accel: 24, friction: 15, maxSpeed: 5.8 };
+    const WAVE_MS = 14000;
+    const RUN_BEST_KEY = "renewal-rush-hero-best";
+    const RUN_COUNT_KEY = "renewal-rush-hero-runs";
+    const UPGRADES = [
+      { id: "damage", title: "Signal Amp", desc: "+25% pulse damage", apply: (m) => { m.damage *= 1.25; } },
+      { id: "firerate", title: "Agent Overclock", desc: "+20% fire rate", apply: (m) => { m.fireRate *= 0.8; } },
+      { id: "speed", title: "Sprint Stack", desc: "+15% move speed", apply: (m) => { m.speed *= 1.15; } },
+      { id: "shield", title: "Shield Patch", desc: "+20 max shield", apply: (s) => { s.maxHp += 20; s.hp = Math.min(s.maxHp, s.hp + 20); } },
+      { id: "mult", title: "ARR Multiplier", desc: "+0.15× run multiplier", apply: (s) => { s.runMult += 0.15; } },
+      { id: "magnet", title: "Signal Magnet", desc: "Pickups pull to you", apply: (m) => { m.magnet = true; } },
+      { id: "regen", title: "Auto-Triage", desc: "Slow shield regen", apply: (m) => { m.regen = 3; } },
+      { id: "dash", title: "Quick Deploy", desc: "-25% dash cooldown", apply: (m) => { m.dashCd *= 0.75; } },
+    ];
+    const COLORS = { healthy: 0x34d399, atRisk: 0xf87171, expansion: 0xfbbf24, churn: 0xef4444, accent: 0x6366f1, pickup: 0xfcd34d };
+    const MOVE = { accel: 26, friction: 14, maxSpeed: 6.2 };
     const LOOK = { sens: 0.0018, smooth: 14 };
 
     let renderer, scene, camera, clock, hero, selectedHero = null;
-    let orbs = [], drones = [], bullets = [], tracers = [];
+    let orbs = [], drones = [], bullets = [], tracers = [], drops = [];
+    let gridHelper = null;
+    let mods = { damage: 1, fireRate: 1, speed: 1, magnet: false, regen: 0, dashCd: 1.4 };
     let state = {}, keys = {}, pointerLocked = false;
     let raycaster = new THREE.Raycaster();
     let mouse = new THREE.Vector2(0, 0);
     let timeouts = [], audioCtx = null;
-    let lastFire = 0, ultReadyAt = 0, beamActive = 0;
+    let lastFire = 0, ultReadyAt = 0, beamActive = 0, dashReadyAt = 0, dashUntil = 0;
 
     const bulletGeo = new THREE.SphereGeometry(0.06, 8, 8);
+    const dropGeo = new THREE.OctahedronGeometry(0.12, 0);
     const droneGeo = new THREE.OctahedronGeometry(0.45, 0);
     const orbGeo = new THREE.SphereGeometry(0.38, 24, 24);
 
@@ -167,6 +217,12 @@
     function sfxHit() { tone(900, 0.06, "triangle", 0.05, 200); }
     function sfxUlt() { tone(220, 0.3, "sawtooth", 0.07, 400); }
     function sfxHurt() { tone(120, 0.15, "sawtooth", 0.06, -40); }
+    function sfxWave() { tone(330, 0.2, "sine", 0.07, 180); tone(660, 0.15, "triangle", 0.05); }
+    function sfxDash() { tone(400, 0.08, "sawtooth", 0.05, -100); }
+    function sfxPickup() { tone(1200, 0.07, "sine", 0.05, 300); }
+    function sfxUpgrade() { tone(523, 0.12, "triangle", 0.06); tone(784, 0.1, "sine", 0.05); }
+
+    function runPayout(base) { return Math.round(base * state.runMult * (1 + state.wave * 0.08)); }
 
     function showCallout(t) {
       const el = $("callout"); el.textContent = t; el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
@@ -207,8 +263,8 @@
 
       const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshStandardMaterial({ color: 0x0e0e14, metalness: 0.8, roughness: 0.25 }));
       floor.rotation.x = -Math.PI / 2; scene.add(floor);
-      const grid = new THREE.GridHelper(40, 40, 0x6366f1, 0x151520);
-      grid.position.y = 0.01; grid.material.opacity = 0.3; grid.material.transparent = true; scene.add(grid);
+      gridHelper = new THREE.GridHelper(40, 40, 0x6366f1, 0x151520);
+      gridHelper.position.y = 0.01; gridHelper.material.opacity = 0.3; gridHelper.material.transparent = true; scene.add(gridHelper);
 
       scene.add(new THREE.AmbientLight(0x404060, 0.5));
       const key = new THREE.DirectionalLight(0x6366f1, 1.3);
@@ -220,29 +276,104 @@
     }
 
     function initState() {
-      hero = selectedHero || HEROES[0];
+      hero = { ...(selectedHero || HEROES[0]) };
+      mods = { damage: 1, fireRate: 1, speed: 1, magnet: false, regen: 0, dashCd: 1.4 };
       state = {
-        startedAt: 0, gameOver: false, arr: 0, kills: 0, streak: 0, rescued: 0,
-        hp: 100, maxHp: 100, yaw: 0, pitch: 0, yawVel: 0, pitchVel: 0,
+        startedAt: 0, gameOver: false, paused: false, arr: 0, kills: 0, streak: 0, rescued: 0,
+        hp: 100, maxHp: 100, wave: 1, runMult: 1, nextWaveAt: 0, upgradesTaken: 0,
+        yaw: 0, pitch: 0, yawVel: 0, pitchVel: 0,
         pos: new THREE.Vector3(0, 1.7, 5), vel: new THREE.Vector3(), kick: 0,
-        spawnAcc: 0, spawnMs: 2200, droneSpawn: 0, fov: 72,
+        spawnAcc: 0, spawnMs: 2200, droneSpawn: 0, fov: 72, dashDir: new THREE.Vector3(),
       };
       orbs.forEach((o) => scene.remove(o.mesh)); orbs = [];
       drones.forEach((d) => scene.remove(d.mesh)); drones = [];
       bullets.forEach((b) => scene.remove(b.mesh)); bullets = [];
       tracers.forEach((t) => scene.remove(t.line)); tracers = [];
-      ultReadyAt = 0; beamActive = 0; lastFire = 0;
+      drops.forEach((d) => scene.remove(d.mesh)); drops = [];
+      ultReadyAt = 0; beamActive = 0; lastFire = 0; dashReadyAt = 0; dashUntil = 0;
+      document.body.classList.remove("lowhp");
+    }
+
+    function offerUpgrades() {
+      if (state.gameOver) return;
+      state.paused = true;
+      document.exitPointerLock?.();
+      const pool = [...UPGRADES].sort(() => Math.random() - 0.5).slice(0, 3);
+      const grid = $("upgrade-grid");
+      grid.innerHTML = "";
+      pool.forEach((u) => {
+        const card = document.createElement("div");
+        card.className = "upgrade-card";
+        card.innerHTML = `<div class="u-title">${u.title}</div><div class="u-desc">${u.desc}</div>`;
+        card.onclick = () => pickUpgrade(u);
+        grid.appendChild(card);
+      });
+      $("upgrade-pick").classList.remove("hidden");
+    }
+
+    function pickUpgrade(u) {
+      if (u.id === "damage") mods.damage *= 1.25;
+      else if (u.id === "firerate") mods.fireRate *= 0.8;
+      else if (u.id === "speed") mods.speed *= 1.15;
+      else if (u.id === "shield") { state.maxHp += 20; state.hp = Math.min(state.maxHp, state.hp + 20); }
+      else if (u.id === "mult") state.runMult += 0.15;
+      else if (u.id === "magnet") mods.magnet = true;
+      else if (u.id === "regen") mods.regen += 3;
+      else if (u.id === "dash") mods.dashCd *= 0.75;
+      state.upgradesTaken++;
+      $("upgrade-pick").classList.add("hidden");
+      state.paused = false;
+      sfxUpgrade();
+      showCallout(u.title.toUpperCase() + "!");
+      canvas.requestPointerLock();
+      updateHud();
+    }
+
+    function advanceWave() {
+      state.wave++;
+      state.runMult = Math.round((state.runMult + 0.12) * 100) / 100;
+      state.nextWaveAt = Date.now() + WAVE_MS;
+      sfxWave();
+      showCallout(`WAVE ${state.wave}`);
+      const burst = Math.min(4, 1 + Math.floor(state.wave / 2));
+      for (let i = 0; i < burst; i++) spawnDrone();
+      if (state.wave % 2 === 0) offerUpgrades();
+      updateHud();
+    }
+
+    function tryDash() {
+      if (state.gameOver || state.paused || performance.now() < dashReadyAt) return;
+      dashReadyAt = performance.now() + mods.dashCd * 1000;
+      dashUntil = performance.now() + 220;
+      camera.getWorldDirection(state.dashDir);
+      state.dashDir.y = 0;
+      if (state.dashDir.lengthSq() < 0.01) state.dashDir.set(0, 0, -1);
+      state.dashDir.normalize();
+      state.vel.copy(state.dashDir).multiplyScalar(14);
+      state.kick = 0.12;
+      sfxDash();
+    }
+
+    function spawnDrop(pos, value) {
+      const mesh = new THREE.Mesh(dropGeo, new THREE.MeshBasicMaterial({ color: COLORS.pickup }));
+      mesh.position.copy(pos);
+      scene.add(mesh);
+      drops.push({ mesh, value, life: 8 });
     }
 
     function updateHud() {
       const left = Math.max(0, Math.ceil((GAME_MS - (Date.now() - state.startedAt)) / 1000));
       $("t-timer").textContent = left;
+      $("t-wave").textContent = state.wave;
+      $("t-mult").textContent = state.runMult.toFixed(1);
       $("t-arr").textContent = fmt(state.arr);
       $("t-kills").textContent = state.kills;
       $("t-streak").textContent = state.streak;
       $("t-hp").textContent = Math.round(state.hp);
-      $("hp-fill").style.width = state.hp + "%";
+      $("hp-fill").style.width = (state.hp / state.maxHp * 100) + "%";
       $("pill-timer").classList.toggle("urgent", left <= 15);
+      document.body.classList.toggle("lowhp", state.hp > 0 && state.hp < 30);
+      $("banner").textContent = state.paused ? "Pick an upgrade…" : `Wave ${state.wave} · ${state.runMult.toFixed(1)}× mult · Shift to dash`;
       const ultLeft = Math.max(0, ultReadyAt - performance.now());
       const ultPct = ultLeft > 0 ? 1 - ultLeft / (hero.ultCd * 1000) : 1;
       $("ult-fill").style.width = (ultPct * 100) + "%";
@@ -284,7 +415,12 @@
       const a = Math.random() * Math.PI * 2;
       mesh.position.set(Math.cos(a) * 14, 1.2, Math.sin(a) * 14 - 2);
       scene.add(mesh);
-      drones.push({ mesh, hp: 25 + Math.random() * 15, speed: 1.8 + Math.random() * 1.2, phase: Math.random() * 6 });
+      const scale = 1 + state.wave * 0.12;
+      drones.push({
+        mesh, hp: (25 + Math.random() * 15) * scale,
+        speed: (1.8 + Math.random() * 1.2) * (1 + state.wave * 0.06),
+        phase: Math.random() * 6,
+      });
     }
 
     function addTracer(from, to, color) {
@@ -295,9 +431,9 @@
     }
 
     function fire() {
-      if (state.gameOver || !pointerLocked) return;
+      if (state.gameOver || state.paused || !pointerLocked) return;
       const now = performance.now();
-      if (now - lastFire < hero.fireRate * 1000) return;
+      if (now - lastFire < hero.fireRate * mods.fireRate * 1000) return;
       lastFire = now;
       sfxFire();
       state.kick = 0.04;
@@ -318,7 +454,7 @@
         scene.add(mesh);
         const end = origin.clone().add(d.clone().multiplyScalar(8));
         addTracer(origin, end, hero.color);
-        bullets.push({ mesh, vel: d.multiplyScalar(55), life: 1.2, damage: hero.damage });
+        bullets.push({ mesh, vel: d.multiplyScalar(55), life: 1.2, damage: hero.damage * mods.damage });
       }
     }
 
@@ -326,12 +462,16 @@
       d.hp -= dmg;
       hitmark(); sfxHit();
       if (d.hp <= 0) {
+        const pos = d.mesh.position.clone();
         scene.remove(d.mesh);
         drones = drones.filter((x) => x !== d);
         state.kills++;
         state.streak++;
-        state.arr += 800 + state.streak * 200;
+        const payout = runPayout(600 + state.streak * 180);
+        state.arr += payout;
+        spawnDrop(pos, Math.round(payout * 0.3));
         if (state.streak % 5 === 0) showCallout(`${state.streak} KILL STREAK!`);
+        if (state.kills % 8 === 0 && state.wave % 2 === 1) offerUpgrades();
         updateHud();
       }
     }
@@ -347,7 +487,7 @@
         return;
       }
       const mult = orb.status === "atRisk" ? 1 : 0.6;
-      const saved = Math.round(orb.arr * mult * (1 + state.streak * 0.05));
+      const saved = runPayout(Math.round(orb.arr * mult * 0.04 * (1 + state.streak * 0.05)));
       state.arr += saved;
       if (orb.status === "atRisk") state.rescued++;
       state.streak++;
@@ -434,12 +574,20 @@
     function endGame(won) {
       if (state.gameOver) return;
       state.gameOver = true;
+      state.paused = false;
+      $("upgrade-pick").classList.add("hidden");
       timeouts.forEach(clearTimeout); timeouts = [];
       document.exitPointerLock?.();
-      $("end-title").textContent = won && state.hp > 0 ? "You saved the quarter." : "Churn won this round.";
+      $("end-title").textContent = won && state.hp > 0 ? "Run complete — quarter saved." : "Run ended — churn won.";
       const rank = state.arr >= 180000 ? "Hero of Renewal" : state.arr >= 70000 ? "Arena Ace" : state.kills >= 15 ? "Churn Hunter" : "Field Agent";
       $("end-rank").textContent = rank;
-      $("end-stats").textContent = `${fmt(state.arr)} · ${state.kills} drone kills · ${state.rescued} rescued · ${state.streak} streak`;
+      $("end-stats").textContent = `${fmt(state.arr)} · Wave ${state.wave} · ${state.kills} kills · ${state.upgradesTaken} upgrades · ${state.runMult.toFixed(1)}× mult`;
+      const runs = Number(localStorage.getItem(RUN_COUNT_KEY) || 0) + 1;
+      localStorage.setItem(RUN_COUNT_KEY, String(runs));
+      const best = Number(localStorage.getItem(RUN_BEST_KEY) || 0);
+      const newBest = state.arr > best;
+      if (newBest) localStorage.setItem(RUN_BEST_KEY, String(state.arr));
+      $("end-run").textContent = `Run #${runs}${newBest ? " · New best!" : best > 0 ? ` · Best ${fmt(best)}` : ""}`;
       $("end").classList.remove("hidden");
     }
 
@@ -450,11 +598,38 @@
       $("end").classList.add("hidden");
       $("hud").style.visibility = "visible";
       state.startedAt = Date.now();
+      state.nextWaveAt = Date.now() + WAVE_MS;
       updateHud();
       ensureAudio();
       timeouts.push(setTimeout(() => endGame(true), GAME_MS));
-      timeouts.push(setTimeout(() => showCallout("FIGHT!"), 400));
+      timeouts.push(setTimeout(() => showCallout("RUN START"), 400));
       canvas.requestPointerLock();
+    }
+
+    function updateDrops(dt) {
+      for (let i = drops.length - 1; i >= 0; i--) {
+        const drop = drops[i];
+        drop.life -= dt;
+        drop.mesh.rotation.y += dt * 5;
+        const toPlayer = state.pos.clone().sub(drop.mesh.position);
+        const dist = toPlayer.length();
+        if (mods.magnet && dist < 8) {
+          toPlayer.normalize();
+          drop.mesh.position.addScaledVector(toPlayer, 12 * dt);
+        } else {
+          drop.mesh.position.y = 0.8 + Math.sin(clock.elapsedTime * 6 + i) * 0.08;
+        }
+        if (dist < 1.2) {
+          state.arr += drop.value;
+          sfxPickup();
+          scene.remove(drop.mesh);
+          drops.splice(i, 1);
+          updateHud();
+        } else if (drop.life <= 0) {
+          scene.remove(drop.mesh);
+          drops.splice(i, 1);
+        }
+      }
     }
 
     function animate() {
@@ -462,7 +637,7 @@
       const dt = Math.min(clock.getDelta(), 0.05);
       const t = clock.elapsedTime;
 
-      if (pointerLocked && !state.gameOver) {
+      if (pointerLocked && !state.gameOver && !state.paused) {
         state.yaw += state.yawVel; state.pitch += state.pitchVel;
         state.pitch = THREE.MathUtils.clamp(state.pitch, -0.55, 0.55);
         state.yawVel *= Math.exp(-LOOK.smooth * dt);
@@ -474,16 +649,23 @@
         if (keys["KeyW"]) wish.add(dir); if (keys["KeyS"]) wish.sub(dir);
         if (keys["KeyA"]) wish.sub(right); if (keys["KeyD"]) wish.add(right);
         if (wish.lengthSq() > 0) wish.normalize();
-        const spd = hero.speed;
-        state.vel.lerp(wish.multiplyScalar(wish.lengthSq() > 0 ? spd : 0), 1 - Math.exp(-MOVE.accel * dt));
-        if (wish.lengthSq() === 0) state.vel.multiplyScalar(Math.exp(-MOVE.friction * dt));
+        const dashing = performance.now() < dashUntil;
+        const spd = hero.speed * mods.speed * (dashing ? 1.35 : 1);
+        if (!dashing) {
+          state.vel.lerp(wish.multiplyScalar(wish.lengthSq() > 0 ? spd : 0), 1 - Math.exp(-MOVE.accel * dt));
+          if (wish.lengthSq() === 0) state.vel.multiplyScalar(Math.exp(-MOVE.friction * dt));
+        }
         state.pos.addScaledVector(state.vel, dt);
+        if (mods.regen > 0 && state.hp < state.maxHp) state.hp = Math.min(state.maxHp, state.hp + mods.regen * dt);
         state.pos.x = THREE.MathUtils.clamp(state.pos.x, -9, 9);
         state.pos.z = THREE.MathUtils.clamp(state.pos.z, -4, 12);
 
         state.kick *= Math.exp(-14 * dt);
-        camera.fov = state.fov + state.kick * 35;
+        const speedFx = state.vel.length() / spd;
+        camera.fov = state.fov + state.kick * 35 + speedFx * 4 + (dashing ? 8 : 0);
         camera.updateProjectionMatrix();
+        $("speedlines").classList.toggle("on", speedFx > 0.55 || dashing);
+        if (gridHelper) gridHelper.position.z = (gridHelper.position.z + state.vel.z * dt * 0.15) % 2;
         camera.position.copy(state.pos);
         camera.rotation.order = "YXZ";
         camera.rotation.y = state.yaw;
@@ -502,15 +684,15 @@
         }
       }
 
-      if (!state.gameOver && state.startedAt) {
+      if (!state.gameOver && state.startedAt && !state.paused) {
+        if (Date.now() >= state.nextWaveAt) advanceWave();
         state.spawnAcc += dt * 1000;
         const elapsed = Date.now() - state.startedAt;
-        state.spawnMs = Math.max(900, 2200 - elapsed * 0.01);
+        state.spawnMs = Math.max(700, (2200 - elapsed * 0.012) / (1 + state.wave * 0.08));
         while (state.spawnAcc >= state.spawnMs) { state.spawnAcc -= state.spawnMs; spawnOrb(); }
         state.droneSpawn += dt;
-        if (state.droneSpawn > Math.max(0.8, 2.2 - elapsed * 0.000015)) {
-          state.droneSpawn = 0; spawnDrone();
-        }
+        const droneInterval = Math.max(0.55, 2.0 - elapsed * 0.00002 - state.wave * 0.08);
+        if (state.droneSpawn > droneInterval) { state.droneSpawn = 0; spawnDrone(); }
         if (Math.floor(elapsed / 250) !== state._ht) { state._ht = Math.floor(elapsed / 250); updateHud(); }
       }
 
@@ -523,6 +705,7 @@
 
       updateBullets(dt);
       updateDrones(dt);
+      updateDrops(dt);
 
       for (let i = tracers.length - 1; i >= 0; i--) {
         tracers[i].life += dt * 4;
@@ -558,7 +741,11 @@
       state.yawVel -= e.movementX * LOOK.sens;
       state.pitchVel -= e.movementY * LOOK.sens;
     });
-    document.addEventListener("keydown", (e) => { keys[e.code] = true; if (e.code === "KeyE") castUlt(); });
+    document.addEventListener("keydown", (e) => {
+      keys[e.code] = true;
+      if (e.code === "KeyE") castUlt();
+      if (e.code === "ShiftLeft" || e.code === "ShiftRight") tryDash();
+    });
     document.addEventListener("keyup", (e) => { keys[e.code] = false; });
     window.addEventListener("resize", () => {
       camera.aspect = innerWidth / innerHeight;
