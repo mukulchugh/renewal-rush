@@ -1,29 +1,30 @@
 {
-  "updatedAt": "2026-06-27T14:30:00Z",
+  "updatedAt": "2026-06-27T19:55:00Z",
   "project": {
     "name": "MyProject",
+    "repo": "https://github.com/mukulchugh/renewal-rush",
     "engine": "Unreal Engine 5.8",
     "template": "First Person Shooter (Blueprint)",
     "path": "/Users/mukulchugh/Documents/Unreal Projects/MyProject"
   },
   "session": {
-    "phase": "lesson-2-polished",
+    "phase": "loop-polish-pass-2-complete",
     "currentLesson": "lesson-02",
     "agentStatus": "ready",
-    "agentMessage": "MCP polish pass 2 done: Quivly lighting, fog, bloom PPV, sky hidden, weapon meshes hidden. Press Play in Lvl_ArenaShooter.",
+    "agentMessage": "Loop pass 2 complete: Quivly lighting tuned, sky hidden, gun meshes hidden. Press Play to preview Agent Pulse arena.",
     "mcpConnected": true,
     "mcpUrl": "http://127.0.0.1:8000/mcp",
     "unrealRunning": true
   },
   "liveArtifact": {
-    "title": "Lvl_ArenaShooter — MCP reskin applied",
+    "title": "Lvl_ArenaShooter — polish pass 2",
     "type": "level",
     "highlight": "agent"
   },
   "nextActions": [
-    "Press Play in Lvl_ArenaShooter — dark indigo mood, no gun visible",
-    "Save level if Unreal prompts",
-    "Lesson 3: Agent Pulse beam (Niagara) + account orb targets"
+    "Press Play — confirm no gun visible, dark indigo mood",
+    "Next loop: spawn account orb actors (green/amber/red emissive)",
+    "Next loop: Blueprint timer + ARR score HUD (90s)"
   ],
   "userInputPending": []
 }

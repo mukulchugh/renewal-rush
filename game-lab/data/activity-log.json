@@ -54,6 +54,11 @@
       "time": "2026-06-27T14:30:00Z",
       "who": "agent",
       "text": "MCP polish pass 2: Quivly sun/skylight/fog tuned, SM_SkySphere hidden, weapon meshes hidden, PPV bloom applied"
+    },
+    {
+      "time": "2026-06-27T15:00:00Z",
+      "who": "agent",
+      "text": "Pushed to GitHub: github.com/mukulchugh/renewal-rush (private, Git LFS for Content assets)"
     }
   ]
 }
