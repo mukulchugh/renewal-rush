@@ -126,7 +126,8 @@
     const LANES = [-2.2, 0, 2.2];
     const BEST_KEY = "renewal-rush-runner-best";
     const COLORS = { track: 0x0e0e14, accent: 0x6366f1, churn: 0xf87171, healthy: 0x34d399, gold: 0xfcd34d, obstacle: 0x52525b, hurdle: 0xfbbf24, danger: 0xef4444 };
-    const LOOK = { sens: 0.0016, maxYaw: 0.55, minPitch: -0.35, maxPitch: 0.25 };
+    const FOV = 98;
+    const LOOK = { sens: 0.0016, maxYaw: 0.72, minPitch: -0.4, maxPitch: 0.3 };
     const CHALLENGE_POOL = [
       { id: "shoot5", label: "Shoot 5 churn drones", goal: 5, track: "punches", reward: 1800 },
       { id: "jump8", label: "Clear 8 hurdles", goal: 8, track: "hurdles", reward: 1500 },
@@ -281,7 +282,7 @@
       player.userData = { jumpY: 0, jumpVel: 0, slideT: 0, eyeH: 1.62 };
       scene.add(player);
 
-      camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.1, 80);
+      camera = new THREE.PerspectiveCamera(FOV, innerWidth / innerHeight, 0.1, 80);
       camera.position.set(0, 1.62, 0);
       player.add(camera);
 
