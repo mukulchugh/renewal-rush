@@ -8,23 +8,23 @@
     "path": "/Users/mukulchugh/Documents/Unreal Projects/MyProject"
   },
   "session": {
-    "phase": "premise-locked",
+    "phase": "prototype-playable",
     "currentLesson": "lesson-03-signal-triage",
     "agentStatus": "ready",
-    "agentMessage": "Premise locked: Signal Triage (Whack-a-Risk) — browser-first. Next: prototype in Game Lab canvas.",
+    "agentMessage": "Renewal Rush playable at /renewal-rush.html — stack connect, signal chips, Full Stack multipliers. Press Play and tap at-risk cards.",
     "mcpConnected": true,
     "mcpUrl": "http://127.0.0.1:8000/mcp",
     "unrealRunning": true
   },
   "liveArtifact": {
-    "title": "Signal Triage — premise doc",
-    "type": "game-script",
-    "highlight": "premiseResearch"
+    "title": "Renewal Rush — browser prototype",
+    "type": "renewal-rush.html",
+    "highlight": "game"
   },
   "nextActions": [
-    "Prototype Signal Triage in game-lab/index.html (canvas)",
-    "Account card: ARR, health score, usage delta on each pop",
-    "Spawn logic + 90s timer + rank titles on end screen"
+    "Play renewal-rush.html — verify stack connect + chip multipliers feel right",
+    "Polish: integration logos from quivly.ai, sound on deploy",
+    "Embed on quivly.ai or share score screenshot flow"
   ],
   "userInputPending": []
 }

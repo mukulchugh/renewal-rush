@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Renewal Rush — Quivly</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --accent: #6366f1;
+      --accent-glow: #6366f144;
+      --bg: #0a0a0a;
+      --surface: #171717;
+      --surface-2: #262626;
+      --border: #333;
+      --text: #fafafa;
+      --muted: #a3a3a3;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --red: #f87171;
+      --market: #a78bfa;
+      --gold: #fcd34d;
+      --font: "Inter", system-ui, sans-serif;
+      --mono: "IBM Plex Mono", monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse 70% 50% at 50% 0%, var(--accent-glow), transparent 70%);
+      pointer-events: none;
+    }
+
+    .app {
+      position: relative;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 16px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 0 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    .logo-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-row img { height: 28px; width: auto; }
+
+    .logo-row h1 {
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .logo-row span { color: var(--muted); font-weight: 400; }
+
+    .hud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .hud-pill {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .hud-pill strong { color: var(--accent); }
+
+    .hud-pill.timer strong { color: var(--text); font-size: 0.85rem; }
+
+    .layout {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 72px 1fr;
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    @media (max-width: 640px) {
+      .layout { grid-template-columns: 56px 1fr; gap: 10px; }
+    }
+
+    .stack-rail {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 8px 4px;
+    }
+
+    .stack-item {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 4px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      opacity: 0.35;
+      transition: opacity 0.4s, border-color 0.4s, box-shadow 0.4s, transform 0.3s;
+    }
+
+    .stack-item.connected {
+      opacity: 1;
+      border-color: var(--accent);
+      box-shadow: 0 0 16px var(--accent-glow);
+      transform: scale(1.02);
+    }
+
+    .stack-item .icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: var(--surface-2);
+      display: grid;
+      place-items: center;
+      font-size: 0.55rem;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: -0.03em;
+    }
+
+    .stack-item.connected .icon {
+      background: var(--accent);
+      color: white;
+    }
+
+    .stack-item .label {
+      font-size: 0.5rem;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.1;
+      max-width: 52px;
+    }
+
+    .stack-item.connected .label { color: var(--text); }
+
+    .stack-pipe {
+      width: 2px;
+      height: 6px;
+      background: var(--border);
+      margin: 0 auto;
+    }
+
+    .stack-pipe.live { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+
+    .board-wrap { display: flex; flex-direction: column; gap: 12px; }
+
+    .phase-banner {
+      text-align: center;
+      font-size: 0.82rem;
+      color: var(--muted);
+      padding: 8px;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .phase-banner.active {
+      color: var(--accent);
+      border-color: var(--accent);
+      animation: pulse-banner 1.5s ease infinite;
+    }
+
+    @keyframes pulse-banner {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      min-height: 320px;
+    }
+
+    .slot {
+      aspect-ratio: 1.1;
+      border-radius: 14px;
+      border: 1px dashed var(--border);
+      background: #0f0f0f;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .slot::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 50% 80%, var(--accent-glow), transparent 60%);
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+
+    .slot.occupied::after { opacity: 1; }
+
+    .card {
+      position: absolute;
+      inset: 4px;
+      border-radius: 12px;
+      border: 2px solid var(--border);
+      background: linear-gradient(160deg, var(--surface-2), var(--surface));
+      padding: 10px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      animation: pop-in 0.25s cubic-bezier(0.34, 1.4, 0.64, 1);
+      transition: transform 0.1s, box-shadow 0.15s;
+      user-select: none;
+    }
+
+    .card:active { transform: scale(0.96); }
+
+    .card.healthy { border-color: var(--green); }
+    .card.at-risk { border-color: var(--red); }
+    .card.expansion { border-color: var(--amber); }
+    .card.full-stack { border-color: var(--gold); box-shadow: 0 0 20px #fcd34d33; }
+
+    @keyframes pop-in {
+      from { transform: scale(0.6) translateY(12px); opacity: 0; }
+      to { transform: scale(1) translateY(0); opacity: 1; }
+    }
+
+    @keyframes deploy-flash {
+      0% { box-shadow: 0 0 0 0 var(--accent); }
+      50% { box-shadow: 0 0 24px 8px var(--accent); }
+      100% { box-shadow: none; }
+    }
+
+    .card.deployed { animation: deploy-flash 0.4s ease; pointer-events: none; opacity: 0; transition: opacity 0.2s; }
+
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 4px;
+    }
+
+    .card-company {
+      font-size: 0.72rem;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+
+    .card-arr {
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      color: var(--accent);
+      white-space: nowrap;
+    }
+
+    .health-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.62rem;
+    }
+
+    .health-bar {
+      flex: 1;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--border);
+      overflow: hidden;
+    }
+
+    .health-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.3s;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+    }
+
+    .chip {
+      font-size: 0.5rem;
+      font-weight: 600;
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    .chip.market {
+      border-color: var(--market);
+      color: var(--market);
+      background: #a78bfa18;
+    }
+
+    .card-status {
+      font-size: 0.58rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .card.healthy .card-status { color: var(--green); }
+    .card.at-risk .card-status { color: var(--red); }
+    .card.expansion .card-status { color: var(--amber); }
+
+    .churn-bar-wrap {
+      height: 6px;
+      background: var(--surface);
+      border-radius: 3px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .churn-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--green), var(--amber), var(--red));
+      transition: width 0.3s;
+      border-radius: 3px;
+    }
+
+    .floater-layer {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    .floater {
+      position: absolute;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--accent);
+      animation: float-up 1s ease forwards;
+      text-shadow: 0 2px 8px #000;
+    }
+
+    .floater.bad { color: var(--red); }
+    .floater.gold { color: var(--gold); }
+
+    @keyframes float-up {
+      from { opacity: 1; transform: translateY(0); }
+      to { opacity: 0; transform: translateY(-48px); }
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: #000000cc;
+      display: grid;
+      place-items: center;
+      z-index: 200;
+      padding: 20px;
+    }
+
+    .overlay.hidden { display: none; }
+
+    .modal {
+      max-width: 420px;
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px 28px;
+      text-align: center;
+      box-shadow: 0 24px 80px #00000088;
+    }
+
+    .modal img { height: 36px; margin-bottom: 20px; }
+
+    .modal h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 8px;
+    }
+
+    .modal .sub {
+      color: var(--muted);
+      font-size: 0.92rem;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    .btn {
+      display: inline-block;
+      font-family: var(--font);
+      font-weight: 600;
+      font-size: 0.9rem;
+      padding: 14px 28px;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      background: var(--accent);
+      color: white;
+      transition: transform 0.15s, opacity 0.15s;
+    }
+
+    .btn:hover { opacity: 0.92; }
+    .btn:active { transform: scale(0.98); }
+
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      margin-top: 10px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 20px 0;
+      text-align: left;
+    }
+
+    .stat {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .stat label {
+      display: block;
+      font-size: 0.65rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
+    }
+
+    .stat value {
+      font-family: var(--mono);
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .rank {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--gold);
+      margin-bottom: 16px;
+    }
+
+    .back-link {
+      position: fixed;
+      bottom: 16px;
+      left: 16px;
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-decoration: none;
+      z-index: 50;
+    }
+
+    .back-link:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+  <div class="floater-layer" id="floaters"></div>
+
+  <div class="overlay" id="title-screen">
+    <div class="modal">
+      <img src="assets/brand/quivly-logo-forest-white.webp" alt="Quivly" />
+      <h2>Renewal Rush</h2>
+      <p class="sub">Connect your stack. Surface every signal — market to CRM.<br />90 seconds to deploy before renewal day.</p>
+      <button class="btn" id="start-btn">Press to start</button>
+      <p class="sub" style="margin-top:16px;font-size:0.75rem;">Tap at-risk accounts · Ignore healthy · Full Stack = 2× ARR</p>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="end-screen">
+    <div class="modal">
+      <img src="assets/brand/quivly-logo-forest-white.webp" alt="Quivly" />
+      <h2 id="end-title">You saved the quarter.</h2>
+      <p class="rank" id="end-rank">Chief Renewal Officer</p>
+      <div class="stats-grid">
+        <div class="stat"><label>ARR Saved</label><div class="value" id="end-arr">$0</div></div>
+        <div class="stat"><label>Signals Surfaced</label><div class="value" id="end-signals">0</div></div>
+        <div class="stat"><label>Stack Coverage</label><div class="value" id="end-coverage">0%</div></div>
+        <div class="stat"><label>Accounts Rescued</label><div class="value" id="end-rescued">0</div></div>
+      </div>
+      <button class="btn" id="replay-btn">Play again</button>
+      <a class="btn btn-ghost" href="https://www.quivly.ai" target="_blank" rel="noopener">Book a demo →</a>
+    </div>
+  </div>
+
+  <a class="back-link" href="index.html">← Game Lab</a>
+
+  <div class="app" id="game" style="visibility:hidden">
+    <div class="topbar">
+      <div class="logo-row">
+        <img src="assets/brand/quivly-logo-forest-white.webp" alt="" />
+        <h1>Renewal Rush <span>· Every signal. One place.</span></h1>
+      </div>
+      <div class="hud">
+        <div class="hud-pill timer">Renewal <strong id="hud-timer">90</strong>s</div>
+        <div class="hud-pill">ARR <strong id="hud-arr">$0</strong></div>
+        <div class="hud-pill">Signals <strong id="hud-signals">0</strong></div>
+        <div class="hud-pill">Stack <strong id="hud-stack">0%</strong></div>
+      </div>
+    </div>
+
+    <div class="phase-banner" id="phase-banner">Connecting your stack…</div>
+
+    <div class="layout">
+      <div class="stack-rail" id="stack-rail"></div>
+      <div class="board-wrap">
+        <div class="grid" id="board"></div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:0.65rem;color:var(--muted);margin-bottom:4px;">
+            <span>Portfolio health</span>
+            <span id="churn-label">100%</span>
+          </div>
+          <div class="churn-bar-wrap"><div class="churn-bar" id="churn-bar" style="width:100%"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const INTEGRATIONS = [
+      { id: "crm", label: "CRM", short: "SF", chip: "CRM" },
+      { id: "calls", label: "Calls", short: "Gn", chip: "Calls" },
+      { id: "revenue", label: "Revenue", short: "St", chip: "Revenue" },
+      { id: "support", label: "Support", short: "Zd", chip: "Support" },
+      { id: "comms", label: "Comms", short: "Sl", chip: "Comms" },
+      { id: "market", label: "Market", short: "Mk", chip: "Market" },
+    ];
+
+    const COMPANIES = [
+      "Vertex Labs", "CloudNine", "DataForge", "Pulse AI", "Stackline",
+      "Northbeam", "Relay HQ", "Opticore", "Finova", "Gridbase",
+    ];
+
+    const RANKS = [
+      { min: 0, title: "Renewal Rookie" },
+      { min: 80000, title: "CSM Speedrunner" },
+      { min: 200000, title: "Chief Renewal Officer" },
+    ];
+
+    const CONNECT_MS = 10000;
+    const GAME_MS = 90000;
+    const SLOTS = 9;
+
+    let state = {};
+    let timers = [];
+    let cardId = 0;
+
+    function $(id) { return document.getElementById(id); }
+
+    function fmtMoney(n) {
+      if (n >= 1000) return "$" + Math.round(n / 1000) + "K";
+      return "$" + Math.round(n);
+    }
+
+    function clearTimers() {
+      timers.forEach(clearInterval);
+      timers.forEach(clearTimeout);
+      timers = [];
+    }
+
+    function initState() {
+      state = {
+        phase: "connect",
+        startedAt: 0,
+        connectDone: false,
+        connected: new Set(),
+        arrSaved: 0,
+        rescued: 0,
+        signalsSurfaced: new Set(),
+        churn: 100,
+        streak: 0,
+        cards: {},
+        spawnMs: 1400,
+        gameOver: false,
+      };
+    }
+
+    function buildUI() {
+      const rail = $("stack-rail");
+      rail.innerHTML = "";
+      INTEGRATIONS.forEach((int, i) => {
+        if (i > 0) {
+          const pipe = document.createElement("div");
+          pipe.className = "stack-pipe";
+          pipe.dataset.pipe = i;
+          rail.appendChild(pipe);
+        }
+        const el = document.createElement("div");
+        el.className = "stack-item";
+        el.dataset.id = int.id;
+        el.innerHTML = `<div class="icon">${int.short}</div><div class="label">${int.label}</div>`;
+        rail.appendChild(el);
+      });
+
+      const board = $("board");
+      board.innerHTML = "";
+      for (let i = 0; i < SLOTS; i++) {
+        const slot = document.createElement("div");
+        slot.className = "slot";
+        slot.dataset.slot = i;
+        board.appendChild(slot);
+      }
+    }
+
+    function connectedCount() { return state.connected.size; }
+
+    function stackCoverage() {
+      return Math.round((connectedCount() / INTEGRATIONS.length) * 100);
+    }
+
+    function updateHud() {
+      const elapsed = Date.now() - state.startedAt;
+      const left = Math.max(0, Math.ceil((GAME_MS - elapsed) / 1000));
+      $("hud-timer").textContent = left;
+      $("hud-arr").textContent = fmtMoney(state.arrSaved);
+      $("hud-signals").textContent = state.signalsSurfaced.size;
+      $("hud-stack").textContent = stackCoverage() + "%";
+      $("churn-bar").style.width = state.churn + "%";
+      $("churn-label").textContent = Math.round(state.churn) + "%";
+
+      if (state.phase === "connect") {
+        $("phase-banner").textContent = "Connecting your stack…";
+        $("phase-banner").classList.add("active");
+      } else {
+        $("phase-banner").textContent = state.connectDone
+          ? "Stack live — surface & deploy on at-risk signals"
+          : "Signals incoming…";
+        $("phase-banner").classList.remove("active");
+      }
+    }
+
+    function connectIntegration(index) {
+      const int = INTEGRATIONS[index];
+      if (!int || state.connected.has(int.id)) return;
+      state.connected.add(int.id);
+      const el = document.querySelector(`.stack-item[data-id="${int.id}"]`);
+      if (el) el.classList.add("connected");
+      const pipe = document.querySelector(`.stack-pipe[data-pipe="${index}"]`);
+      if (pipe) pipe.classList.add("live");
+      updateHud();
+    }
+
+    function runConnectPhase() {
+      INTEGRATIONS.forEach((_, i) => {
+        timers.push(setTimeout(() => connectIntegration(i), (CONNECT_MS / INTEGRATIONS.length) * i + 400));
+      });
+      timers.push(setTimeout(() => {
+        state.connectDone = true;
+        state.phase = "playing";
+        updateHud();
+      }, CONNECT_MS));
+    }
+
+    function pickStatus() {
+      const r = Math.random();
+      const stackBonus = connectedCount() / INTEGRATIONS.length;
+      if (r < 0.22 + stackBonus * 0.08) return "at-risk";
+      if (r < 0.32) return "expansion";
+      return "healthy";
+    }
+
+    function pickChips(status) {
+      const available = INTEGRATIONS.filter((i) => state.connected.has(i.id)).map((i) => i.chip);
+      if (!available.length) available.push("CRM");
+
+      let count = 1;
+      const elapsed = Date.now() - state.startedAt;
+      if (state.connectDone) {
+        if (elapsed > 25000 && Math.random() < 0.45) count = 2;
+        if (elapsed > 45000 && Math.random() < 0.35) count = 3;
+        if (status === "at-risk" && elapsed > 30000 && state.connected.has("market") && Math.random() < 0.4) {
+          count = Math.max(count, 2);
+        }
+      }
+
+      const shuffled = [...available].sort(() => Math.random() - 0.5);
+      const chips = shuffled.slice(0, Math.min(count, shuffled.length));
+
+      if (status === "at-risk" && state.connected.has("market") && !chips.includes("Market") && Math.random() < 0.35) {
+        chips.push("Market");
+      }
+
+      return [...new Set(chips)];
+    }
+
+    function multiplier(chips, status) {
+      if (status !== "at-risk" && status !== "expansion") return status === "expansion" ? 1.2 : 0;
+      let m = 1;
+      if (chips.length >= 3) m = 2;
+      else if (chips.length >= 2) m = 1.5;
+      if (chips.includes("Market")) m = Math.max(m, 2.5);
+      return m;
+    }
+
+    function freeSlot() {
+      for (let i = 0; i < SLOTS; i++) {
+        if (!state.cards[i]) return i;
+      }
+      return -1;
+    }
+
+    function spawnCard() {
+      if (state.gameOver) return;
+      const slot = freeSlot();
+      if (slot < 0) return;
+
+      const status = pickStatus();
+      const chips = pickChips(status);
+      const baseArr = 18000 + Math.floor(Math.random() * 45000);
+      const health = status === "healthy" ? 72 + Math.floor(Math.random() * 20)
+        : status === "expansion" ? 65 + Math.floor(Math.random() * 15)
+        : 28 + Math.floor(Math.random() * 30);
+
+      const card = {
+        id: ++cardId,
+        slot,
+        company: COMPANIES[Math.floor(Math.random() * COMPANIES.length)],
+        arr: baseArr,
+        health,
+        status,
+        chips,
+        ttl: 2800 + Math.random() * 1200,
+      };
+
+      state.cards[slot] = card;
+      renderCard(card);
+
+      timers.push(setTimeout(() => expireCard(slot), card.ttl));
+    }
+
+    function healthColor(h) {
+      if (h >= 60) return "var(--green)";
+      if (h >= 40) return "var(--amber)";
+      return "var(--red)";
+    }
+
+    function renderCard(card) {
+      const slotEl = document.querySelector(`.slot[data-slot="${card.slot}"]`);
+      slotEl.classList.add("occupied");
+      slotEl.innerHTML = "";
+
+      const el = document.createElement("div");
+      const isFull = card.chips.length >= 3;
+      el.className = `card ${card.status}${isFull ? " full-stack" : ""}`;
+      el.dataset.cardId = card.id;
+
+      const statusLabel = card.status === "at-risk" ? "At Risk" : card.status === "expansion" ? "Expansion" : "Healthy";
+      const chipHtml = card.chips.map((c) =>
+        `<span class="chip${c === "Market" ? " market" : ""}">${c}</span>`
+      ).join("");
+
+      el.innerHTML = `
+        <div class="card-head">
+          <div class="card-company">${card.company}</div>
+          <div class="card-arr">${fmtMoney(card.arr)}</div>
+        </div>
+        <div class="health-row">
+          <span>Health ${card.health}</span>
+          <div class="health-bar"><div class="health-fill" style="width:${card.health}%;background:${healthColor(card.health)}"></div></div>
+        </div>
+        <div class="chips">${chipHtml}</div>
+        <div class="card-status">${statusLabel}${isFull ? " · Full Stack" : ""}</div>
+      `;
+
+      el.addEventListener("click", () => deployCard(card.slot));
+      slotEl.appendChild(el);
+    }
+
+    function showFloater(x, y, text, kind) {
+      const layer = $("floaters");
+      const f = document.createElement("div");
+      f.className = "floater" + (kind ? " " + kind : "");
+      f.textContent = text;
+      f.style.left = x + "px";
+      f.style.top = y + "px";
+      layer.appendChild(f);
+      setTimeout(() => f.remove(), 1000);
+    }
+
+    function churnTick(mult = 1) {
+      state.churn = Math.max(0, state.churn - (4 * mult));
+      state.streak = 0;
+      updateHud();
+      if (state.churn <= 0) endGame(false);
+    }
+
+    function deployCard(slot) {
+      const card = state.cards[slot];
+      if (!card || state.gameOver) return;
+
+      const slotEl = document.querySelector(`.slot[data-slot="${slot}"]`);
+      const rect = slotEl.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      if (card.status === "healthy") {
+        churnTick(1);
+        showFloater(cx, cy, "Wrong tag — churn tick", "bad");
+        removeCard(slot, true);
+        return;
+      }
+
+      const mult = multiplier(card.chips, card.status);
+      const saved = Math.round(card.arr * mult * (card.status === "expansion" ? 0.6 : 1));
+      state.arrSaved += saved;
+      if (card.status === "at-risk") state.rescued += 1;
+      state.streak += 1;
+      card.chips.forEach((c) => state.signalsSurfaced.add(c));
+
+      const sources = card.chips.filter((c) => c !== "Market").slice(0, 2).join(" + ");
+      const marketNote = card.chips.includes("Market") ? " + Market" : "";
+      showFloater(cx, cy, `+${fmtMoney(saved)} ARR`, mult >= 2 ? "gold" : "");
+      showFloater(cx, cy - 24, `Draft ready — ${sources}${marketNote}`, "");
+
+      const cardEl = slotEl.querySelector(".card");
+      if (cardEl) cardEl.classList.add("deployed");
+      removeCard(slot, false);
+      updateHud();
+    }
+
+    function expireCard(slot) {
+      const card = state.cards[slot];
+      if (!card) return;
+      if (card.status === "at-risk") {
+        const mult = card.chips.length >= 2 ? 2 : 1;
+        churnTick(mult);
+        const slotEl = document.querySelector(`.slot[data-slot="${slot}"]`);
+        if (slotEl) {
+          const r = slotEl.getBoundingClientRect();
+          showFloater(r.left + r.width / 2, r.top, "Missed at-risk!", "bad");
+        }
+      }
+      removeCard(slot, true);
+    }
+
+    function removeCard(slot, immediate) {
+      delete state.cards[slot];
+      const slotEl = document.querySelector(`.slot[data-slot="${slot}"]`);
+      if (!slotEl) return;
+      if (immediate) {
+        slotEl.classList.remove("occupied");
+        slotEl.innerHTML = "";
+      } else {
+        setTimeout(() => {
+          slotEl.classList.remove("occupied");
+          slotEl.innerHTML = "";
+        }, 200);
+      }
+    }
+
+    function endGame(won) {
+      if (state.gameOver) return;
+      state.gameOver = true;
+      clearTimers();
+      Object.keys(state.cards).forEach((s) => removeCard(Number(s), true));
+
+      let rank = RANKS[0].title;
+      for (const r of RANKS) {
+        if (state.arrSaved >= r.min) rank = r.title;
+      }
+
+      $("end-title").textContent = won || state.churn > 0 ? "You saved the quarter." : "Churn got there first.";
+      $("end-rank").textContent = rank;
+      $("end-arr").textContent = fmtMoney(state.arrSaved);
+      $("end-signals").textContent = state.signalsSurfaced.size;
+      $("end-coverage").textContent = stackCoverage() + "%";
+      $("end-rescued").textContent = state.rescued;
+      $("end-screen").classList.remove("hidden");
+    }
+
+    function startGame() {
+      clearTimers();
+      initState();
+      buildUI();
+      $("title-screen").classList.add("hidden");
+      $("end-screen").classList.add("hidden");
+      $("game").style.visibility = "visible";
+      state.startedAt = Date.now();
+      updateHud();
+      runConnectPhase();
+
+      timers.push(setInterval(updateHud, 200));
+
+      timers.push(setInterval(() => {
+        if (!state.gameOver) spawnCard();
+      }, state.spawnMs));
+
+      timers.push(setInterval(() => {
+        if (state.gameOver) return;
+        state.spawnMs = Math.max(700, state.spawnMs - 40);
+      }, 15000));
+
+      timers.push(setTimeout(() => endGame(true), GAME_MS));
+    }
+
+    $("start-btn").addEventListener("click", startGame);
+    $("replay-btn").addEventListener("click", startGame);
+
+    document.addEventListener("keydown", (e) => {
+      if (e.code !== "Space") return;
+      e.preventDefault();
+      if (!$("title-screen").classList.contains("hidden")) startGame();
+      else if (!$("end-screen").classList.contains("hidden")) startGame();
+    });
+
+    buildUI();
+  </script>
+</body>
+</html>
