@@ -25,7 +25,7 @@
     .crosshair::after { top: 10px; left: 4px; height: 2px; width: 14px; }
     .crosshair.target::before, .crosshair.target::after { background: var(--red); transform: scale(1.12); }
     .crosshair.bad::before, .crosshair.bad::after { background: var(--green); }
-    .flash { position: fixed; inset: 0; background: #6366f118; pointer-events: none; opacity: 0; z-index: 4; }
+    .flash { position: fixed; inset: 0; background: #818cf833; pointer-events: none; opacity: 0; z-index: 4; }
     .flash.on { opacity: 1; transition: opacity 0.05s; }
     .hint { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); font-size: 0.62rem; color: #555; pointer-events: none; z-index: 2; }
     .hud { position: fixed; inset: 0; pointer-events: none; z-index: 2; padding: 14px 18px; display: flex; flex-direction: column; justify-content: space-between; color: var(--text); }
@@ -88,21 +88,21 @@
       <div class="challenge-label"><span id="challenge-text">Challenge loading…</span><strong id="challenge-progress">0/0</strong></div>
       <div class="challenge-bar"><div class="challenge-fill" id="challenge-fill"></div></div>
     </div>
-    <div class="banner" id="banner">Auto-run — strafe lanes · jump hurdles · slide beams · shoot churn</div>
+    <div class="banner" id="banner">Auto-run — strafe lanes · jump hurdles · slide beams · laser churn</div>
   </div>
   <div class="hurdle-hint" id="hurdle-hint"></div>
-  <p class="hint" id="hint">A/D lanes · Mouse aim · Click shoot · Space jump · S slide</p>
+  <p class="hint" id="hint">A/D lanes · Mouse aim · Click laser · Space jump · S slide</p>
   <a class="back" href="index.html">← Game Lab</a>
 
   <div class="overlay" id="title">
     <div class="modal">
       <img src="assets/brand/quivly-logo-forest-white.webp" alt="" />
       <h2>FPS Runner</h2>
-      <p>First-person endless run — sprint forward, strafe lanes, jump hurdles, slide beams, and shoot churn drones before they stack.</p>
+      <p>First-person endless run — sprint forward, strafe lanes, jump hurdles, slide beams, and vaporize churn drones with your Agent Pulse laser.</p>
       <div class="controls">
         <div><span>A / D</span> strafe lane</div>
         <div><span>Mouse</span> aim</div>
-        <div><span>Click</span> shoot Pulse</div>
+        <div><span>Click</span> fire laser</div>
         <div><span>Space / S</span> jump / slide</div>
       </div>
       <button class="btn" id="start">Lock aim &amp; run</button>
@@ -146,7 +146,9 @@
 
     let renderer, scene, camera, clock, gun;
     let player, playerLane = 1, targetLaneX = 0, laneLerp = 0;
-    let trackChunks = [], entities = [], particles = [];
+    let trackChunks = [], entities = [], particles = [], laserBolts = [];
+    const laserUp = new THREE.Vector3(0, 1, 0);
+    const laserTmp = new THREE.Vector3();
     let state = {}, keys = {}, audioCtx = null;
     let pointerLocked = false, lookYaw = 0, lookPitch = 0, mouseDX = 0;
     let raycaster = new THREE.Raycaster();
@@ -166,7 +168,10 @@
     }
     function sfxLane() { tone(440, 0.05); }
     function sfxJump() { tone(520, 0.08, "sine", 0.06); }
-    function sfxShoot() { tone(220, 0.05, "sawtooth", 0.06); tone(480, 0.04, "square", 0.05); }
+    function sfxLaser() {
+      tone(1400, 0.04, "sine", 0.05, -600);
+      tone(920, 0.06, "triangle", 0.04);
+    }
     function sfxHit() { tone(880, 0.07, "triangle", 0.06); }
     function sfxCoin() { tone(1200, 0.05, "sine", 0.05); }
     function sfxCrash() { tone(90, 0.25, "sawtooth", 0.08); }
@@ -286,16 +291,33 @@
       camera.position.set(0, 1.62, 0);
       player.add(camera);
 
-      const gunMat = new THREE.MeshStandardMaterial({ color: 0x6366f1, emissive: 0x6366f1, emissiveIntensity: 0.35, metalness: 0.5, roughness: 0.25 });
+      const bodyMat = new THREE.MeshStandardMaterial({ color: 0x18181b, metalness: 0.75, roughness: 0.28 });
+      const railMat = new THREE.MeshStandardMaterial({ color: 0x6366f1, emissive: 0x818cf8, emissiveIntensity: 1.1, metalness: 0.35, roughness: 0.15 });
+      const coreMat = new THREE.MeshStandardMaterial({ color: 0xc7d2fe, emissive: 0x6366f1, emissiveIntensity: 2.2, metalness: 0.2, roughness: 0.1 });
       gun = new THREE.Group();
-      const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, 0.55), gunMat);
-      barrel.position.set(0.12, -0.02, -0.35);
-      const grip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.22, 0.14), gunMat);
-      grip.position.set(0.1, -0.18, -0.08);
-      const sight = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.06), new THREE.MeshStandardMaterial({ color: 0xfcd34d, emissive: 0xfcd34d, emissiveIntensity: 0.8 }));
-      sight.position.set(0.12, 0.06, -0.2);
-      gun.add(barrel, grip, sight);
-      gun.userData = { recoil: 0, bob: 0 };
+      const chassis = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.11, 0.38), bodyMat);
+      chassis.position.set(0.14, -0.15, -0.16);
+      const grip = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.2, 0.12), bodyMat);
+      grip.position.set(0.14, -0.26, -0.02);
+      const railL = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.05, 0.52), railMat);
+      railL.position.set(0.075, -0.1, -0.4);
+      const railR = railL.clone();
+      railR.position.x = 0.205;
+      const emitter = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.07, 0.07, 10), coreMat);
+      emitter.rotation.x = Math.PI / 2;
+      emitter.position.set(0.14, -0.1, -0.64);
+      const core = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 10), coreMat);
+      core.position.set(0.14, -0.11, -0.3);
+      const coil = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.012, 6, 16), railMat);
+      coil.rotation.y = Math.PI / 2;
+      coil.position.set(0.14, -0.1, -0.48);
+      const muzzle = new THREE.Mesh(
+        new THREE.SphereGeometry(0.035, 8, 8),
+        new THREE.MeshBasicMaterial({ color: 0xa5b4fc, transparent: true, opacity: 0.95 })
+      );
+      muzzle.position.set(0.14, -0.1, -0.68);
+      gun.add(chassis, grip, railL, railR, emitter, core, coil, muzzle);
+      gun.userData = { recoil: 0, bob: 0, muzzle, muzzleFlash: 0 };
       camera.add(gun);
 
       scene.add(new THREE.HemisphereLight(0x6366f1, 0x0a0a0a, 0.65));
@@ -345,6 +367,8 @@
         nextGauntletAt: 80, gauntletIdx: 0, lastDistHint: 0,
       };
       entities.forEach((e) => scene.remove(e.mesh)); entities = [];
+      laserBolts.forEach((b) => { scene.remove(b.beam); scene.remove(b.glow); });
+      laserBolts = [];
       playerLane = 1;
       targetLaneX = LANES[1];
       player.position.set(0, 0, 0);
@@ -381,13 +405,16 @@
 
     function shoot() {
       if (state.fireCooldown > 0) return;
-      state.fireCooldown = 0.14;
-      gun.userData.recoil = 0.12;
-      sfxShoot();
+      state.fireCooldown = 0.12;
+      gun.userData.recoil = 0.1;
+      gun.userData.muzzleFlash = 1;
+      sfxLaser();
       flashMuzzle();
       camera.getWorldPosition(aimOrigin);
       camera.getWorldDirection(aimDir);
-      let best = null, bestDist = Infinity;
+      const muzzlePos = new THREE.Vector3();
+      gun.userData.muzzle.getWorldPosition(muzzlePos);
+      let best = null, bestDist = Infinity, hitPos = null;
       for (const ent of entities) {
         if (ent.dead || (ent.type !== "churn" && ent.type !== "coin")) continue;
         const wp = new THREE.Vector3();
@@ -397,8 +424,10 @@
         const dist = to.length();
         if (dist > 28) continue;
         if (to.normalize().dot(aimDir) < 0.94) continue;
-        if (dist < bestDist) { bestDist = dist; best = ent; }
+        if (dist < bestDist) { bestDist = dist; best = ent; hitPos = wp; }
       }
+      const beamEnd = hitPos || aimOrigin.clone().add(aimDir.clone().multiplyScalar(24));
+      spawnLaserBeam(muzzlePos, beamEnd);
       if (!best) { state.combo = 0; updateHud(); return; }
       if (best.type === "churn") {
         best.dead = true;
@@ -408,7 +437,7 @@
         bumpChallenge("punches");
         if (state.challenge?.track === "maxCombo" && state.maxCombo >= state.challenge.goal) completeChallenge();
         showCombo(state.combo);
-        showCallout(state.combo >= 5 ? "KILL STREAK!" : "PULSE HIT!");
+        showCallout(state.combo >= 5 ? "KILL STREAK!" : "LASER HIT!");
         spawnBurst(best.mesh.position, COLORS.churn);
         sfxHit();
       } else if (best.type === "coin") collectCoin(best);
@@ -422,6 +451,24 @@
       sfxCoin();
       spawnBurst(ent.mesh.position, COLORS.gold);
       updateHud();
+    }
+
+    function spawnLaserBeam(from, to) {
+      laserTmp.copy(to).sub(from);
+      const len = laserTmp.length();
+      if (len < 0.05) return;
+      const mid = from.clone().add(to).multiplyScalar(0.5);
+      const dir = laserTmp.normalize();
+      const beamMat = new THREE.MeshBasicMaterial({ color: 0xe0e7ff, transparent: true, opacity: 0.95 });
+      const glowMat = new THREE.MeshBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.4 });
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, len, 6), beamMat);
+      const glow = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, len, 6), glowMat);
+      beam.position.copy(mid);
+      glow.position.copy(mid);
+      beam.quaternion.setFromUnitVectors(laserUp, dir);
+      glow.quaternion.copy(beam.quaternion);
+      scene.add(beam, glow);
+      laserBolts.push({ beam, glow, life: 0.11, maxLife: 0.11 });
     }
 
     function spawnBurst(pos, color) {
@@ -727,9 +774,18 @@
         const bobX = Math.cos(gun.userData.bob * 0.5) * 0.008;
         if (gun.userData.recoil > 0) {
           gun.userData.recoil = Math.max(0, gun.userData.recoil - dt * 2.5);
-          gun.position.set(0.1 + bobX, -0.16 + bobY + gun.userData.recoil * 0.15, -0.3 + gun.userData.recoil * 0.4);
+          gun.position.set(0.08 + bobX, -0.12 + bobY + gun.userData.recoil * 0.12, -0.22 + gun.userData.recoil * 0.35);
         } else {
-          gun.position.set(0.1 + bobX, -0.16 + bobY, -0.3);
+          gun.position.set(0.08 + bobX, -0.12 + bobY, -0.22);
+        }
+        if (gun.userData.muzzleFlash > 0) {
+          gun.userData.muzzleFlash = Math.max(0, gun.userData.muzzleFlash - dt * 8);
+          const pulse = 0.6 + gun.userData.muzzleFlash * 0.4;
+          gun.userData.muzzle.material.opacity = pulse;
+          gun.userData.muzzle.scale.setScalar(1 + gun.userData.muzzleFlash * 0.8);
+        } else {
+          gun.userData.muzzle.material.opacity = 0.75;
+          gun.userData.muzzle.scale.setScalar(1);
         }
 
         if (state.fireCooldown > 0) state.fireCooldown -= dt;
@@ -751,6 +807,19 @@
         p.mesh.position.addScaledVector(p.vel, dt);
         p.vel.y -= 8 * dt;
         if (p.life <= 0) { scene.remove(p.mesh); particles.splice(i, 1); }
+      }
+
+      for (let i = laserBolts.length - 1; i >= 0; i--) {
+        const bolt = laserBolts[i];
+        bolt.life -= dt;
+        const t = bolt.life / bolt.maxLife;
+        bolt.beam.material.opacity = t * 0.95;
+        bolt.glow.material.opacity = t * 0.4;
+        if (bolt.life <= 0) {
+          scene.remove(bolt.beam);
+          scene.remove(bolt.glow);
+          laserBolts.splice(i, 1);
+        }
       }
 
       renderer.render(scene, camera);

@@ -13,6 +13,8 @@ REQUIRED = [
     "three.module.js",
     "switchLane",
     "shoot",
+    "spawnLaserBeam",
+    "sfxLaser",
     "KILL STREAK",
     "renewal-rush-runner-best",
     "quivly-logo-forest-white.webp",
