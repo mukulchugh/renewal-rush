@@ -14,8 +14,9 @@
     "updatedAt": "2026-06-27T23:00:00Z",
     "status": "web-polish-pass",
     "landingSource": "data/quivly-landing.json",
-    "platformRecommendation": "web-only-ship",
-    "platformNote": "Ship renewal-rush-3d.html on quivly.ai. Unreal is sandbox only — not in distribution path."
+    "platformRecommendation": "Three.js (web-only-ship)",
+    "platformNote": "Research June 2026: Three.js is the best fit for Renewal Rush — tiny embed load, URL distribution, AI-friendly, WebGPU-ready. See data/web-engine-research.json. Unreal/Unity/Godot web exports are too heavy for marketing embeds.",
+    "webEngineResearch": "data/web-engine-research.json"
   },
   "landingPage": {
     "url": "https://www.quivly.ai",

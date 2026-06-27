@@ -1,0 +1,47 @@
+{
+  "researchedAt": "2026-06-27T23:30:00Z",
+  "method": "Firecrawl search+scrape: Cinevva 2026 guide, OpenReplay JS engines, Utsubo Three/Babylon/PlayCanvas, Godot web docs",
+  "artifacts": [
+    { "id": "cinevva", "path": ".firecrawl/cinevva-engines.md", "url": "https://app.cinevva.com/guides/web-game-engines-comparison" },
+    { "id": "openreplay", "path": ".firecrawl/openreplay-engines.md", "url": "https://blog.openreplay.com/javascript-game-engines-compared/" },
+    { "id": "utsubo", "path": ".firecrawl/utsubo-3d.md", "url": "https://www.utsubo.com/blog/threejs-vs-babylonjs-vs-playcanvas-comparison" }
+  ],
+  "verdict": {
+    "renewalRush": "Three.js",
+    "rationale": [
+      "Already shipping four playable modes in single-file HTML (~30KB each + CDN Three.js ~168KB gzip)",
+      "Best fit for quivly.ai embed: tiny load, URL-shareable, no install",
+      "Largest ecosystem + best AI/vibe-coding support (Cursor, Claude, llms.txt)",
+      "React Three Fiber path if game moves into Next.js app later",
+      "WebGPU ready (r171+) with WebGL2 fallback — Safari 26 closed last holdout in 2025"
+    ],
+    "doNotUseForShip": [
+      { "engine": "Unreal Engine 5", "reason": "No native HTML5 export; Pixel Streaming = server cost + latency per user" },
+      { "engine": "Unity WebGL", "reason": "~8MB+ empty build, slow load — bad for marketing embeds" },
+      { "engine": "Godot HTML5", "reason": "~9MB gzipped, Safari issues, C# can't export to web — overkill for 90s arcade" }
+    ]
+  },
+  "byGameType": {
+    "2dArcade": { "pick": "Phaser 3", "alt": "Defold", "note": "PagerTron-style 2D; Phaser = biggest community, Defold = smallest builds (~1.14MB)" },
+    "3dRunnerShooter": { "pick": "Three.js", "alt": "Babylon.js", "note": "Three = flexible + tiny; Babylon = batteries-included physics/audio/XR" },
+    "3dWithEditor": { "pick": "PlayCanvas", "note": "Cloud editor, ~1-2MB runtime, mature WebGPU — best if artists join" },
+    "2dNonCoder": { "pick": "Construct 3 or GDevelop", "note": "Visual builders, subscription/freemium" },
+    "miniGameAsia": { "pick": "Cocos Creator", "note": "WeChat/TikTok mini-games, strong Wasm physics" }
+  },
+  "comparison": [
+    { "engine": "Three.js", "type": "3D renderer", "buildSize": "~168KB gzip", "webGpu": "Production (r171+)", "bestFor": "Embeds, marketing games, React sites, AI-assisted dev" },
+    { "engine": "Babylon.js", "type": "3D game engine", "buildSize": "~1.4MB", "webGpu": "Full (8.0+)", "bestFor": "Full 3D games needing physics/audio/XR built-in" },
+    { "engine": "PlayCanvas", "type": "Web-first 3D", "buildSize": "~1-2MB", "webGpu": "Most mature", "bestFor": "Team editor workflow, mobile 3D" },
+    { "engine": "Phaser 3", "type": "2D framework", "buildSize": "~500KB", "webGpu": "N/A", "bestFor": "2D browser arcade" },
+    { "engine": "Defold", "type": "2D/3D Wasm", "buildSize": "~1.14MB", "webGpu": "Experimental", "bestFor": "Fastest load casual web games" },
+    { "engine": "Godot 4.7", "type": "Full engine", "buildSize": "~9MB gzip", "webGpu": "Experimental flag", "bestFor": "Indie 2D/3D with editor, not marketing embeds" },
+    { "engine": "Unity WebGL", "type": "Full engine", "buildSize": "~8MB+", "webGpu": "Experimental", "bestFor": "Cross-platform when web is secondary" },
+    { "engine": "Unreal UE5", "type": "Full engine", "buildSize": "N/A (streaming)", "webGpu": "Pixel Streaming only", "bestFor": "High-fidelity viz with server budget — not arcade" }
+  ],
+  "renewalRushModes": {
+    "renewal-rush-runner.html": { "engine": "Three.js", "status": "ship", "fit": "excellent" },
+    "renewal-rush-hero.html": { "engine": "Three.js", "status": "ship", "fit": "excellent" },
+    "renewal-rush-3d.html": { "engine": "Three.js", "status": "ship", "fit": "excellent" },
+    "renewal-rush.html": { "engine": "Vanilla Canvas/DOM", "status": "fallback", "fit": "good — could migrate to Phaser if 2D expands" }
+  }
+}
