@@ -3,7 +3,13 @@
 
 from __future__ import annotations
 
+import argparse
 import json
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -12,6 +18,7 @@ from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
 NOTES_FILE = DATA / "user-notes.json"
+DEFAULT_PORT = 3847
 
 
 def load_notes() -> list:
@@ -70,8 +77,95 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(payload)
 
 
-if __name__ == "__main__":
-    port = 3847
+class ReuseHTTPServer(ThreadingHTTPServer):
+    allow_reuse_address = True
+
+
+def pids_on_port(port: int) -> list[int]:
+    try:
+        out = subprocess.check_output(
+            ["lsof", "-ti", f":{port}"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return []
+    return [int(pid) for pid in out.split() if pid.strip().isdigit()]
+
+
+def game_lab_is_up(port: int) -> bool:
+    url = f"http://127.0.0.1:{port}/renewal-rush.html"
+    try:
+        with urllib.request.urlopen(url, timeout=1.5) as resp:
+            return resp.status == 200
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return False
+
+
+def stop_port_listeners(port: int) -> list[int]:
+    killed: list[int] = []
+    for pid in pids_on_port(port):
+        if pid == 0:
+            continue
+        for sig in ("TERM", "KILL"):
+            try:
+                subprocess.run(["kill", f"-{sig}", str(pid)], check=True, capture_output=True)
+                killed.append(pid)
+                break
+            except subprocess.CalledProcessError:
+                continue
+    if killed:
+        time.sleep(0.3)
+    return killed
+
+
+def bind_server(port: int) -> ReuseHTTPServer:
+    return ReuseHTTPServer(("127.0.0.1", port), Handler)
+
+
+def serve(port: int) -> None:
+    httpd = bind_server(port)
     print(f"Game Lab → http://127.0.0.1:{port}")
     print("Leave this running while you learn and build.")
-    ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
+    print(f"Renewal Rush → http://127.0.0.1:{port}/renewal-rush.html")
+    httpd.serve_forever()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Game Lab local server")
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser.add_argument(
+        "--restart",
+        action="store_true",
+        help="Stop whatever is on this port, then start Game Lab",
+    )
+    args = parser.parse_args()
+    port = args.port
+
+    if args.restart:
+        stopped = stop_port_listeners(port)
+        if stopped:
+            print(f"Stopped previous listener(s) on :{port}: {', '.join(map(str, stopped))}")
+
+    try:
+        bind_server(port)
+    except OSError as exc:
+        if exc.errno != 48:  # Address already in use
+            raise
+        pids = pids_on_port(port)
+        pid_hint = f" (PID {pids[0]})" if pids else ""
+        if game_lab_is_up(port):
+            print(f"Game Lab is already running at http://127.0.0.1:{port}{pid_hint}")
+            print(f"Renewal Rush → http://127.0.0.1:{port}/renewal-rush.html")
+            print("To restart: python3 server.py --restart")
+            return 0
+        print(f"Port {port} is in use{pid_hint} but is not Game Lab.", file=sys.stderr)
+        print("Free the port or run: python3 server.py --restart", file=sys.stderr)
+        return 1
+
+    serve(port)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
