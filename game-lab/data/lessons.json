@@ -1,0 +1,57 @@
+{
+  "tracks": [
+    {
+      "id": "foundations",
+      "title": "Foundations",
+      "lessons": [
+        {
+          "id": "lesson-01",
+          "title": "Press Play — see your game breathe",
+          "status": "current",
+          "goal": "Understand Level, Actor, and the Play button.",
+          "steps": [
+            "Open level Lvl_ArenaShooter in Content Browser",
+            "Click the green Play button (or Alt+P)",
+            "Move with WASD, look with mouse, shoot with left click",
+            "Press Esc to stop Play mode"
+          ],
+          "concept": "A Level is the world. Actors are things inside it. Play lets you test without building a full game.",
+          "tryInUnreal": "Content → Variant_Shooter → Lvl_ArenaShooter"
+        },
+        {
+          "id": "lesson-02",
+          "title": "Meet the Content Browser",
+          "status": "locked",
+          "goal": "Find blueprints, maps, and assets.",
+          "steps": [],
+          "concept": "Everything your game owns lives in Content/. Blueprints hold logic. Maps are levels.",
+          "tryInUnreal": "Window → Content Browser"
+        },
+        {
+          "id": "lesson-03",
+          "title": "Your first change — add light",
+          "status": "locked",
+          "goal": "Place an actor and see the world change.",
+          "steps": [],
+          "concept": "Dragging actors into the viewport changes the level immediately.",
+          "tryInUnreal": "Place Actors → Lights → Point Light"
+        }
+      ]
+    },
+    {
+      "id": "gameplay",
+      "title": "Gameplay",
+      "lessons": [
+        {
+          "id": "lesson-04",
+          "title": "Score when you hit a target",
+          "status": "locked",
+          "goal": "Connect shooting to feedback the player understands.",
+          "steps": [],
+          "concept": "Game feel = action + response. UI and sound make hits satisfying.",
+          "tryInUnreal": "BP_ShooterGameMode"
+        }
+      ]
+    }
+  ]
+}

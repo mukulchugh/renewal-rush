@@ -1,0 +1,195 @@
+{
+  "source": "https://www.quivly.ai",
+  "fetchedAt": "2026-06-27T12:00:00Z",
+  "scrapeId": "019f0952-d816-74ab-ad45-8d02249f956d",
+  "brand": {
+    "tagline": "The AI workforce for post-sales teams",
+    "headline": "Your new post-sales team, without the headcount.",
+    "subheadline": "AI agents that surface and act on churn risks and expansion signals to grow your accounts on autopilot.",
+    "howItWorksHeadline": "Every signal. One place. Automatic action.",
+    "howItWorksSub": "Quivly ingests signals from your entire post-sales stack and autonomously acts on churn risks and expansion opportunities."
+  },
+  "productFlow": [
+    {
+      "step": 1,
+      "name": "Connect",
+      "title": "Connect every signal",
+      "description": "Pipe in CRM, usage, revenue, calls, support, and market data. One live profile per account."
+    },
+    {
+      "step": 2,
+      "name": "See",
+      "title": "See the whole customer",
+      "description": "One timeline per account: usage, contract value, contacts, market signals, week-over-week changes."
+    },
+    {
+      "step": 3,
+      "name": "Score",
+      "title": "Score what matters",
+      "description": "Real-time health score from your signals\u2014every move explained in plain English."
+    },
+    {
+      "step": 4,
+      "name": "Act",
+      "title": "Act, with the draft already written",
+      "description": "Ranks next best action per account; drafts email, Slack, or invites grounded in the signal."
+    }
+  ],
+  "productConcepts": [
+    "Customer 360",
+    "Health Score",
+    "Actions Feed",
+    "ARR",
+    "Churn risk",
+    "Expansion",
+    "Renewal",
+    "Risk Level",
+    "Usage",
+    "Support",
+    "Market Signals"
+  ],
+  "sampleMetrics": {
+    "arr": "$49,930",
+    "healthScore": 57,
+    "healthDelta": -7,
+    "riskLevel": "Medium",
+    "renewalStatus": "5d overdue",
+    "usageDecline": "-42% weekly active users"
+  },
+  "colors": {
+    "accent": "#6366F1",
+    "accentHsl": "239 84% 67%",
+    "backgroundDark": "hsl(0 0% 3.9%)",
+    "foregroundDark": "hsl(0 0% 98%)",
+    "mutedDark": "hsl(0 0% 63.9%)",
+    "source": "quivly-app globals.css"
+  },
+  "assets": {
+    "logoForestWhite": "https://www.quivly.ai/quivly-logo-forest-white.webp",
+    "logoForestWhiteCdn": "https://www.quivly.ai/_next/image?url=%2Fquivly-logo-forest-white.webp&w=384&q=75&dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+    "heroBackground": "https://www.quivly.ai/_next/image?url=%2Fsanity-cdn%2Fimages%2Frroqi730%2Fproduction%2Fed9480f42c6eb9fd49efe1d9d62fb8fdc73ab68c-2048x2048.webp%3Fw%3D1920%26q%3D65%26auto%3Dformat&w=3840&q=75&dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+    "productDemo": "https://www.quivly.ai/_next/image?url=%2Fsanity-cdn%2Fimages%2Frroqi730%2Fproduction%2F54b2cc20418dd77edb237349f0793fefb92fcc11-3600x2018.webp%3Frect%3D6%2C0%2C3588%2C2018%26w%3D720%26h%3D405%26q%3D70%26auto%3Dformat&w=3840&q=75&dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+    "allImages": [
+      {
+        "url": "https://www.quivly.ai/_next/image?url=%2Fquivly-logo-forest-white.webp&w=384&q=75&dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+        "kind": "logo"
+      },
+      {
+        "url": "https://www.quivly.ai/_next/image?url=%2Fsanity-cdn%2Fimages%2Frroqi730%2Fproduction%2Fed9480f42c6eb9fd49efe1d9d62fb8fdc73ab68c-2048x2048.webp%3Fw%3D1920%26q%3D65%26auto%3Dformat&w=3840&q=75&dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+        "kind": "hero"
+      },
+      {
+        "url": "https://www.quivly.ai/_next/image?url=%2Fsanity-cdn%2Fimages%2Frroqi730%2Fproduction%2F54b2cc20418dd77edb237349f0793fefb92fcc11-3600x2018.webp%3Frect%3D6%2C0%2C3588%2C2018%26w%3D720%26h%3D405%26q%3D70%26auto%3Dformat&w=3840&q=75&dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+        "kind": "hero"
+      },
+      {
+        "url": "https://www.quivly.ai/_next/image?url=%2Flogos%2Feragon.webp&w=3840&q=75&dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+        "kind": "logo"
+      },
+      {
+        "url": "https://www.quivly.ai/_next/image?url=%2Flogos%2Fuplex.webp&w=3840&q=75&dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+        "kind": "logo"
+      },
+      {
+        "url": "https://www.quivly.ai/_next/image?url=%2Flogos%2Funion.webp&w=3840&q=75&dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+        "kind": "logo"
+      },
+      {
+        "url": "https://www.quivly.ai/_next/image?url=%2Flogos%2Fhyperspell.webp&w=3840&q=75&dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+        "kind": "logo"
+      },
+      {
+        "url": "https://www.quivly.ai/_next/image?url=%2Flogos%2Fatlas.webp&w=3840&q=75&dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+        "kind": "logo"
+      },
+      {
+        "url": "https://www.quivly.ai/_next/image?url=%2Flogos%2Fbrief.webp&w=3840&q=75&dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+        "kind": "logo"
+      },
+      {
+        "url": "https://www.quivly.ai/logos/mycroft.svg",
+        "kind": "logo"
+      },
+      {
+        "url": "https://www.quivly.ai/_next/image?url=%2Flogos%2Fagentpress.png&w=3840&q=75&dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+        "kind": "logo"
+      },
+      {
+        "url": "https://www.quivly.ai/_next/image?url=%2Flogos%2Fsources%2Fsalesforce.webp&w=64&q=75&dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+        "kind": "logo"
+      },
+      {
+        "url": "https://www.quivly.ai/_next/image?url=%2Flogos%2Fsources%2Fgong.webp&w=64&q=75&dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+        "kind": "logo"
+      },
+      {
+        "url": "https://www.quivly.ai/_next/image?url=%2Flogos%2Fsources%2Fstripe.webp&w=64&q=75&dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+        "kind": "logo"
+      },
+      {
+        "url": "https://www.quivly.ai/_next/image?url=%2Flogos%2Fsources%2Flinkedin.webp&w=64&q=75&dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+        "kind": "logo"
+      },
+      {
+        "url": "https://www.quivly.ai/_next/image?url=%2Flogos%2Fsources%2Fzendesk.webp&w=64&q=75&dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+        "kind": "logo"
+      },
+      {
+        "url": "https://www.quivly.ai/logos/sources/slack.svg?dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+        "kind": "logo"
+      },
+      {
+        "url": "https://www.quivly.ai/logos/customers/modal.svg",
+        "kind": "logo"
+      },
+      {
+        "url": "https://www.quivly.ai/logos/customers/vercel.svg",
+        "kind": "logo"
+      },
+      {
+        "url": "https://www.quivly.ai/logos/customers/railway.svg",
+        "kind": "logo"
+      },
+      {
+        "url": "https://www.quivly.ai/_next/image?url=%2Flogos%2Fsources%2Fgong-icon.webp&w=3840&q=75&dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+        "kind": "logo"
+      },
+      {
+        "url": "https://www.quivly.ai/avatars/robyn-lee.webp",
+        "kind": "avatar"
+      },
+      {
+        "url": "https://www.quivly.ai/avatars/shalabh.webp",
+        "kind": "avatar"
+      },
+      {
+        "url": "https://www.quivly.ai/avatars/chalam.webp",
+        "kind": "avatar"
+      },
+      {
+        "url": "https://www.quivly.ai/avatars/ginger.webp",
+        "kind": "avatar"
+      },
+      {
+        "url": "https://www.quivly.ai/avatars/one-chowdhury.webp",
+        "kind": "avatar"
+      },
+      {
+        "url": "https://www.quivly.ai/_next/image?url=%2Fquivly-logo-white.webp&w=3840&q=75&dpl=dpl_GVKYYAQKCfZhNBDk3z3G1nN7eFfW",
+        "kind": "logo"
+      }
+    ]
+  },
+  "cta": {
+    "primary": "Book a demo",
+    "app": "https://app.quivly.ai/",
+    "website": "https://www.quivly.ai"
+  },
+  "testimonialSnippets": [
+    "CSMs are managing up to 60% more ARR in their books of business",
+    "Quivly has become a core part of our customer intelligence stack",
+    "Churn risk starts on day one"
+  ],
+  "markdownLength": 11664,
+  "linkCount": 33
+}

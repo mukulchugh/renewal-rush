@@ -1,0 +1,29 @@
+{
+  "updatedAt": "2026-06-27T14:30:00Z",
+  "project": {
+    "name": "MyProject",
+    "engine": "Unreal Engine 5.8",
+    "template": "First Person Shooter (Blueprint)",
+    "path": "/Users/mukulchugh/Documents/Unreal Projects/MyProject"
+  },
+  "session": {
+    "phase": "lesson-2-polished",
+    "currentLesson": "lesson-02",
+    "agentStatus": "ready",
+    "agentMessage": "MCP polish pass 2 done: Quivly lighting, fog, bloom PPV, sky hidden, weapon meshes hidden. Press Play in Lvl_ArenaShooter.",
+    "mcpConnected": true,
+    "mcpUrl": "http://127.0.0.1:8000/mcp",
+    "unrealRunning": true
+  },
+  "liveArtifact": {
+    "title": "Lvl_ArenaShooter — MCP reskin applied",
+    "type": "level",
+    "highlight": "agent"
+  },
+  "nextActions": [
+    "Press Play in Lvl_ArenaShooter — dark indigo mood, no gun visible",
+    "Save level if Unreal prompts",
+    "Lesson 3: Agent Pulse beam (Niagara) + account orb targets"
+  ],
+  "userInputPending": []
+}

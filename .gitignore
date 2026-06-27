@@ -1,0 +1,41 @@
+# Unreal Engine
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+Build/
+*.sln
+*.xcodeproj
+*.xcworkspace
+*.opensdf
+*.sdf
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE / local tooling
+.vs/
+.idea/
+*.swp
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+.Python
+.venv/
+venv/
+
+# Game Lab scrape cache (structured data lives in data/)
+game-lab/.firecrawl/
+
+# MCP / agent debug captures (optional artifacts)
+game-lab/assets/*-capture.txt
+
+# Local editor noise — keep Config/ defaults, ignore machine-specific saved overrides
+# Saved/ is already ignored above

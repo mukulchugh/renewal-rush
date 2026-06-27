@@ -1,0 +1,46 @@
+{
+  "terms": [
+    {
+      "id": "level",
+      "name": "Level",
+      "emoji": "🗺️",
+      "simple": "The map — the 3D world players walk through.",
+      "inYourProject": "Lvl_ArenaShooter.umap"
+    },
+    {
+      "id": "actor",
+      "name": "Actor",
+      "emoji": "🎭",
+      "simple": "Any object in the world: player, gun, light, wall.",
+      "inYourProject": "BP_FirstPersonCharacter, Point Lights, meshes"
+    },
+    {
+      "id": "blueprint",
+      "name": "Blueprint",
+      "emoji": "🧩",
+      "simple": "Visual logic — boxes and wires instead of code.",
+      "inYourProject": "BP_ShooterGameMode, BP_ShooterPlayerController"
+    },
+    {
+      "id": "play",
+      "name": "Play",
+      "emoji": "▶️",
+      "simple": "Test the game inside the editor without exporting.",
+      "inYourProject": "Green Play button, Alt+P"
+    },
+    {
+      "id": "mcp",
+      "name": "Unreal MCP",
+      "emoji": "🔗",
+      "simple": "A bridge so Grok can read and change your editor while you learn.",
+      "inYourProject": "http://127.0.0.1:8000/mcp"
+    },
+    {
+      "id": "content-browser",
+      "name": "Content Browser",
+      "emoji": "📁",
+      "simple": "Your project's filing cabinet — all assets and blueprints.",
+      "inYourProject": "Content/ folder in the editor"
+    }
+  ]
+}

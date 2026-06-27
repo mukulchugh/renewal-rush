@@ -1,0 +1,202 @@
+{
+  "meta": {
+    "title": "Renewal Rush",
+    "workingTitle": "Quivly: Renewal Rush",
+    "confirmedTitle": "Renewal Rush",
+    "company": "Quivly.ai",
+    "tagline": "AI workforce for post-sales teams",
+    "genre": "Arcade / First-person micro-game",
+    "tone": "Fast, witty, enterprise-playful — not cringe, not heavy",
+    "oneLiner": "Deploy Quivly agents to save at-risk accounts before renewal day hits — 90 seconds, high score, bragging rights.",
+    "playTime": "90 seconds per run",
+    "scope": "Small — one arena level, reskin starter template, marketing embeddable",
+    "audience": ["Quivly team", "customers (CS / post-sales)", "marketing / conferences / social"],
+    "updatedAt": "2026-06-27T12:00:00Z",
+    "status": "brand-synced",
+    "landingSource": "data/quivly-landing.json"
+  },
+  "landingPage": {
+    "url": "https://www.quivly.ai",
+    "fetchedAt": "2026-06-27T12:00:00Z",
+    "headline": "Your new post-sales team, without the headcount.",
+    "subheadline": "AI agents that surface and act on churn risks and expansion signals to grow your accounts on autopilot.",
+    "tagline": "The AI workforce for post-sales teams",
+    "productFlow": ["Connect", "See", "Score", "Act"],
+    "logoLocal": "assets/brand/quivly-logo-forest-white.webp",
+    "logoUrl": "https://www.quivly.ai/quivly-logo-forest-white.webp"
+  },
+  "inspiration": {
+    "enterpriseGames": [
+      {
+        "name": "PagerTron (incident.io)",
+        "why": "Tiny vibe-coded game on a marketing page — proves craft, fun, shareable"
+      },
+      {
+        "name": "Internal olympics / leaderboards (Wiz, etc.)",
+        "why": "Team bonding, competitive short sessions"
+      },
+      {
+        "name": "Product-themed arcade (SaaS gamification)",
+        "why": "Teach the product metaphor through play, not a demo deck"
+      }
+    ],
+    "whatWeAreNot": [
+      "Full game / multiple levels / story campaign",
+      "Serious sim of post-sales",
+      "Heavy cutscenes or lore bible"
+    ]
+  },
+  "premise": {
+    "hook": "Renewal day is in 90 seconds. Accounts are slipping. You're the post-sales lead — but you've got Quivly AI agents in your pocket.",
+    "protagonist": "Player = Post-Sales hero (CSM / RevOps vibe). Not a soldier — a deal-saver with AI backup.",
+    "setting": "Abstract 'Customer Command' arena — floating account cards, clean Quivly-branded void (think Stripe meets arcade).",
+    "conflict": "At-risk accounts spawn faster than you can handle alone.",
+    "stakes": "Save ARR before the renewal timer hits zero.",
+    "whyItMatters": "Mirrors real Quivly value: AI workforce scales post-sales without the chaos."
+  },
+  "pillars": [
+    "90-second runs — conference booth friendly",
+    "Instantly gets what Quivly does (AI helps post-sales move faster)",
+    "Shareable score screen for LinkedIn / team Slack",
+    "Built on existing FPS arena — we learn Unreal without scope creep"
+  ],
+  "gameplayLoop": {
+    "durationSeconds": 90,
+    "steps": [
+      "Timer starts — Renewal Day countdown",
+      "Account orbs spawn: 🟢 Healthy (ignore), 🔴 At-risk (tag with Quivly Agent), 🟡 Expansion (bonus collect)",
+      "Deploy agent = shoot / interact — satisfying ping + '+$ARR' floater",
+      "Wrong tag = small penalty (churn tick)",
+      "End screen: ARR saved, accounts rescued, rank title ('Chief Renewal Officer')"
+    ]
+  },
+  "acts": [
+    {
+      "id": "act-1",
+      "title": "The only act",
+      "description": "One arena, one loop, replay for high score. Marketing CTA after play."
+    }
+  ],
+  "scenes": [
+    {
+      "id": "scene-01",
+      "title": "Customer Command Arena",
+      "unrealLevel": "Lvl_ArenaShooter (reskin)",
+      "duration": "90s",
+      "beats": [
+        "Title card: QUIVLY — Renewal Rush",
+        "Spawn player in arena",
+        "Wave spawner activates account orbs",
+        "HUD: timer + ARR saved + streak",
+        "End card + share CTA"
+      ]
+    }
+  ],
+  "characters": [
+    {
+      "id": "player",
+      "name": "You",
+      "role": "Post-sales lead with Quivly agents on standby"
+    },
+    {
+      "id": "quivly-agent",
+      "name": "Quivly Agent",
+      "role": "The 'shot' — visual beam or drone that tags at-risk accounts"
+    }
+  ],
+  "uiCopy": {
+    "start": "Renewal day in 90 seconds. Deploy your agents.",
+    "startAlt": "Every signal. One place. 90 seconds to act.",
+    "win": "You saved the quarter.",
+    "winAlt": "ARR secured — your post-sales team, without the headcount.",
+    "lose": "Churn got there first.",
+    "loseAlt": "Risk got there first. Quivly would've had the draft ready.",
+    "cta": "See how Quivly does this for real → quivly.ai",
+    "ctaButton": "Book a demo",
+    "hudLabels": {
+      "timer": "Renewal",
+      "score": "ARR Saved",
+      "streak": "Actions",
+      "health": "Health Score"
+    },
+    "floaterSaved": "+ARR",
+    "floaterRisk": "At Risk",
+    "floaterExpansion": "Expansion",
+    "rankTitles": ["Renewal Rookie", "CSM Speedrunner", "Chief Renewal Officer"]
+  },
+  "marketingUse": {
+    "team": "Internal leaderboard, Friday fun, onboarding icebreaker",
+    "customers": "Booth demo, webinar opener, 'feel the speed' moment",
+    "social": "Screenshot score card, challenge coworkers"
+  },
+  "unrealBuildPlan": [
+    "Reskin arena + lighting (Quivly colors)",
+    "Replace targets with account orb actors",
+    "Blueprint: score, timer, spawn waves",
+    "End-screen widget (UMG)",
+    "Optional: embed link or WebGL export later"
+  ],
+  "openQuestions": [
+    "Leaderboard: local only first, or web later?"
+  ],
+  "lockedDecisions": [
+    "Title: Renewal Rush (confirmed)",
+    "Priority: most smooth + beautiful — premium SaaS look, not military shooter",
+    "Interaction: Agent Pulse (elegant beam) — not rifle / gun fantasy",
+    "Brand synced from quivly.ai landing page — forest logo, indigo accent #6366F1"
+  ],
+  "visualDirection": {
+    "aesthetic": "Premium dark SaaS command center — Stripe meets arcade glow",
+    "mood": "Calm confidence, fast but never chaotic",
+    "quivlyBrand": {
+      "accent": "#6366F1",
+      "accentHsl": "239 84% 67%",
+      "background": "#0A0A0A",
+      "backgroundHsl": "0 0% 3.9%",
+      "surface": "#262626",
+      "surfaceHsl": "0 0% 14.9%",
+      "text": "#FAFAFA",
+      "textHsl": "0 0% 98%",
+      "muted": "#A3A3A3",
+      "mutedHsl": "0 0% 63.9%",
+      "success": "#34D399",
+      "warning": "#FBBF24",
+      "risk": "#F87171",
+      "logo": "assets/brand/quivly-logo-forest-white.webp",
+      "logoTheme": "forest-white",
+      "source": "quivly.ai landing + quivly-app globals.css"
+    },
+    "gameplayMapping": {
+      "connect": "Round start — signals flood in (orb spawn wave)",
+      "see": "Player scans arena — Customer 360 orbs show ARR + status",
+      "score": "Health-colored orbs: green healthy, amber medium, red at-risk",
+      "act": "Agent Pulse tags at-risk accounts — Actions Feed style +ARR floater"
+    },
+    "world": {
+      "floor": "Dark reflective plane, subtle grid, soft indigo rim light",
+      "sky": "Deep navy void with slow-moving light fog — no harsh skybox",
+      "spawn": "Floating glass account orbs with soft bloom — not enemy soldiers",
+      "lighting": "Lumen on, 1 warm key + 1 cool Quivly-blue fill, no flat lighting"
+    },
+    "feel": {
+      "movement": "Smooth first-person walk — no head-bob, gentle acceleration",
+      "feedback": "Pulse beam with particle trail, soft chime + floating +ARR text",
+      "camera": "Subtle post-process: bloom, vignette, color grade indigo shadows",
+      "ui": "Minimal HUD — thin font, glass panels, big timer, no clutter"
+    },
+    "avoid": [
+      "Gun models, muzzle flash, blood, industrial grey blocks",
+      "Loud arcade chaos, cheap particle spam",
+      "Default starter content look unchanged"
+    ]
+  },
+  "unrealPolishChecklist": [
+    "Enable Lumen + Virtual Shadow Maps in project settings",
+    "Add Post Process Volume: bloom, exposure, slight vignette",
+    "Replace rifle with invisible Agent Pulse (line trace + Niagara beam)",
+    "Account orbs: emissive materials + point lights",
+    "Exponential Height Fog for depth",
+    "UMG HUD: Quivly colors, Inter-style typography feel",
+    "Target 60fps — small arena, few actors = smooth on Mac"
+  ]
+}
