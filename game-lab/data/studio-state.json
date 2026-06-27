@@ -11,7 +11,7 @@
     "phase": "web-polish",
     "currentLesson": "lesson-03-signal-triage",
     "agentStatus": "ready",
-    "agentMessage": "FPS Runner ship target — renewal-rush-runner.html. First-person auto-run + lane strafe + shoot churn + hurdles + challenges.",
+    "agentMessage": "Advanced FPS Runner — zones, elite swarms, upgrades, power-ups, dash, multipliers, rush mode. renewal-rush-runner.html",
     "mcpConnected": false,
     "mcpUrl": "http://127.0.0.1:8000/mcp",
     "unrealRunning": false

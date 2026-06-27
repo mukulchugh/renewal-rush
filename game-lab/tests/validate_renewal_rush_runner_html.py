@@ -25,6 +25,10 @@ REQUIRED = [
     "crosshair",
     "requestPointerLock",
     "GAUNTLET!",
+    "UPGRADES",
+    "spawnBossWave",
+    "multiplier",
+    "ZONES",
 ]
 
 

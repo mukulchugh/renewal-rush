@@ -65,10 +65,38 @@
     .callout.show { animation: co 1s ease forwards; }
     @keyframes co { 0% { opacity: 0; transform: translateX(-50%) scale(0.6); } 20% { opacity: 1; transform: translateX(-50%) scale(1.1); } 100% { opacity: 0; transform: translateX(-50%) translateY(-24px); } }
     a.back { position: fixed; bottom: 10px; left: 12px; font-size: 0.68rem; color: #555; z-index: 5; text-decoration: none; }
+    .crosshair.overcharge::before, .crosshair.overcharge::after { background: #c7d2fe; box-shadow: 0 0 8px #818cf8; }
+    .vignette { position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: 0; transition: opacity 0.3s;
+      background: radial-gradient(ellipse at center, transparent 40%, #6366f122 72%, #00000066 100%); }
+    .vignette.rush { opacity: 1; animation: rush-v 1.1s ease infinite; }
+    .vignette.danger { opacity: 1; background: radial-gradient(ellipse at center, transparent 35%, #f8717133 100%); }
+    @keyframes rush-v { 0%, 100% { opacity: 0.65; } 50% { opacity: 1; } }
+    .pill.hot { border-color: var(--gold); animation: pulse-pill 0.6s ease infinite; }
+    .pill.hot strong { color: var(--gold); }
+    @keyframes pulse-pill { 50% { box-shadow: 0 0 10px #fcd34d44; } }
+    .pill.shield-on { border-color: #818cf8; }
+    .pill.shield-on strong { color: #a5b4fc; }
+    .power-strip { align-self: center; display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+    .power-chip { font-size: 0.58rem; padding: 4px 8px; border-radius: 6px; background: #262626cc; border: 1px solid var(--border); color: var(--muted); }
+    .power-chip.on { color: var(--text); border-color: var(--accent); background: #6366f122; }
+    .floater { position: fixed; font-family: "IBM Plex Mono", monospace; font-size: 0.78rem; font-weight: 700;
+      color: var(--gold); pointer-events: none; z-index: 6; animation: float-up 0.9s ease forwards; text-shadow: 0 2px 10px #000; }
+    .floater.bad { color: var(--red); }
+    .floater.accent { color: #a5b4fc; }
+    @keyframes float-up { to { opacity: 0; transform: translateY(-36px) scale(1.08); } }
+    .hud.shake { animation: shake 0.28s ease; }
+    @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+    .upgrade-grid { display: grid; gap: 8px; margin-bottom: 14px; }
+    .upgrade-btn { text-align: left; background: #262626; border: 1px solid var(--border); border-radius: 12px;
+      padding: 12px 14px; cursor: pointer; color: var(--text); transition: border-color 0.15s, transform 0.15s; }
+    .upgrade-btn:hover { border-color: var(--accent); transform: translateY(-1px); }
+    .upgrade-btn strong { display: block; font-size: 0.82rem; margin-bottom: 3px; }
+    .upgrade-btn span { font-size: 0.7rem; color: var(--muted); }
   </style>
 </head>
 <body>
   <canvas id="canvas"></canvas>
+  <div class="vignette" id="vignette"></div>
   <div class="flash" id="flash"></div>
   <div class="callout" id="callout"></div>
   <div class="crosshair" id="crosshair"></div>
@@ -78,11 +106,15 @@
       <div class="stats">
         <div class="pill gold">ARR <strong id="t-arr">$0</strong></div>
         <div class="pill">Dist <strong id="t-dist">0</strong>m</div>
+        <div class="pill" id="pill-zone">Zone <strong id="t-zone">Connect</strong></div>
         <div class="pill">Speed <strong id="t-spd">1.0</strong>×</div>
+        <div class="pill hot" id="pill-mult">Mult <strong id="t-mult">1.0</strong>×</div>
+        <div class="pill" id="pill-shield">Shield <strong id="t-shield">0</strong></div>
         <div class="pill">Kill <strong id="t-combo">0</strong>×</div>
         <div class="pill">Done <strong id="t-challenges">0</strong></div>
       </div>
     </div>
+    <div class="power-strip" id="power-strip"></div>
     <div class="combo" id="combo-display"></div>
     <div class="challenge-box" id="challenge-box">
       <div class="challenge-label"><span id="challenge-text">Challenge loading…</span><strong id="challenge-progress">0/0</strong></div>
@@ -98,14 +130,23 @@
     <div class="modal">
       <img src="assets/brand/quivly-logo-forest-white.webp" alt="" />
       <h2>FPS Runner</h2>
-      <p>First-person endless run — sprint forward, strafe lanes, jump hurdles, slide beams, and vaporize churn drones with your Agent Pulse laser.</p>
+      <p>Advanced FPS runner — zones ramp up difficulty, elite churn swarms, power-ups, lane dash, score multipliers, and roguelite upgrades every challenge.</p>
       <div class="controls">
         <div><span>A / D</span> strafe lane</div>
         <div><span>Mouse</span> aim</div>
         <div><span>Click</span> fire laser</div>
         <div><span>Space / S</span> jump / slide</div>
+        <div><span>Shift</span> lane dash</div>
+        <div><span>Challenges</span> pick upgrades</div>
       </div>
       <button class="btn" id="start">Lock aim &amp; run</button>
+    </div>
+  </div>
+  <div class="overlay hidden" id="upgrade">
+    <div class="modal">
+      <h2>Signal upgrade</h2>
+      <p>Challenge cleared — pick a run upgrade</p>
+      <div class="upgrade-grid" id="upgrade-grid"></div>
     </div>
   </div>
   <div class="overlay hidden" id="end">
@@ -143,6 +184,21 @@
       [{ type: "beam", lane: 0 }, { type: "beam", lane: 2 }, { type: "mover", lane: 1 }],
       [{ type: "gate", lane: 1 }, { type: "spike", lane: 0 }, { type: "spike", lane: 2 }],
     ];
+    const ZONES = [
+      { name: "Connect", at: 0, speed: 1 },
+      { name: "Surface", at: 120, speed: 1.15 },
+      { name: "Deploy", at: 280, speed: 1.35 },
+      { name: "Renewal Rush", at: 450, speed: 1.55 },
+    ];
+    const UPGRADES = [
+      { id: "rapid", label: "Rapid Fire", desc: "12% faster laser cooldown", apply: (s) => { s.up.fireRate += 0.12; } },
+      { id: "beam", label: "Wide Beam", desc: "Stronger aim lock-on", apply: (s) => { s.up.aim += 0.035; } },
+      { id: "shield", label: "Shield Cell", desc: "+1 crash block", apply: (s) => { s.shield++; } },
+      { id: "overdrive", label: "Overdrive", desc: "8s double ARR & wide laser", apply: (s) => { s.power.overcharge = 8; } },
+      { id: "magnet", label: "ARR Magnet", desc: "7s pull all chips", apply: (s) => { s.power.magnet = 7; } },
+      { id: "mult", label: "Score Amp", desc: "+0.5× multiplier", apply: (s) => { s.multiplier = Math.min(5, s.multiplier + 0.5); } },
+    ];
+    const POWER_LABELS = { overcharge: "Overdrive", magnet: "Magnet", slowmo: "Focus" };
 
     let renderer, scene, camera, clock, gun;
     let player, playerLane = 1, targetLaneX = 0, laneLerp = 0;
@@ -177,6 +233,107 @@
     function sfxCrash() { tone(90, 0.25, "sawtooth", 0.08); }
     function sfxChallenge() { tone(660, 0.12, "triangle", 0.07); tone(990, 0.1, "sine", 0.05); }
     function sfxHurdle() { tone(400, 0.06, "sine", 0.04); }
+    function sfxPower() { tone(520, 0.1, "sine", 0.06, 280); tone(780, 0.08, "triangle", 0.05); }
+    function sfxDash() { tone(300, 0.07, "sawtooth", 0.05, 120); }
+    function sfxNear() { tone(640, 0.06, "sine", 0.04); }
+
+    function aimDot() { return 0.94 - (state.up?.aim || 0) - (state.power.overcharge > 0 ? 0.04 : 0); }
+
+    function showFloater(text, cls = "") {
+      const el = document.createElement("div");
+      el.className = "floater " + cls;
+      el.textContent = text;
+      el.style.left = (48 + Math.random() * 4) + "%";
+      el.style.top = (42 + Math.random() * 6) + "%";
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 900);
+    }
+
+    function shakeHud() {
+      const hud = $("hud");
+      hud.classList.remove("shake");
+      void hud.offsetWidth;
+      hud.classList.add("shake");
+    }
+
+    function bumpMultiplier(n = 0.1) {
+      state.multiplier = Math.min(5, state.multiplier + n);
+      $("pill-mult").classList.toggle("hot", state.multiplier >= 2);
+    }
+
+    function updatePowerHud() {
+      const strip = $("power-strip");
+      strip.innerHTML = "";
+      Object.entries(POWER_LABELS).forEach(([k, label]) => {
+        const t = state.power[k];
+        if (t > 0) {
+          const chip = document.createElement("div");
+          chip.className = "power-chip on";
+          chip.textContent = `${label} ${t.toFixed(0)}s`;
+          strip.appendChild(chip);
+        }
+      });
+      $("crosshair").classList.toggle("overcharge", state.power.overcharge > 0);
+    }
+
+    function tickPowerups(dt) {
+      ["overcharge", "magnet", "slowmo"].forEach((k) => {
+        if (state.power[k] > 0) state.power[k] = Math.max(0, state.power[k] - dt);
+      });
+      updatePowerHud();
+    }
+
+    function checkZones() {
+      let z = ZONES[0];
+      for (const zone of ZONES) {
+        if (state.dist >= zone.at) z = zone;
+      }
+      if (z.name !== state.zoneName) {
+        state.zoneName = z.name;
+        state.zoneSpeed = z.speed;
+        showCallout(z.name.toUpperCase() + "!");
+        hintAction(`Zone: ${z.name}`);
+        $("t-zone").textContent = z.name;
+      }
+    }
+
+    function pickUpgrades(n = 3) {
+      const pool = [...UPGRADES];
+      const picks = [];
+      while (picks.length < n && pool.length) {
+        const i = Math.floor(Math.random() * pool.length);
+        picks.push(pool.splice(i, 1)[0]);
+      }
+      return picks;
+    }
+
+    function showUpgradePick() {
+      state.paused = true;
+      document.exitPointerLock?.();
+      const grid = $("upgrade-grid");
+      grid.innerHTML = "";
+      pickUpgrades(3).forEach((u) => {
+        const btn = document.createElement("button");
+        btn.className = "upgrade-btn";
+        btn.innerHTML = `<strong>${u.label}</strong><span>${u.desc}</span>`;
+        btn.onclick = () => {
+          u.apply(state);
+          $("upgrade").classList.add("hidden");
+          state.paused = false;
+          sfxPower();
+          showFloater(u.label + "!", "accent");
+          updateHud();
+          setTimeout(() => {
+            if (state.running) {
+              startNextChallenge();
+              $("canvas").requestPointerLock?.();
+            }
+          }, 400);
+        };
+        grid.appendChild(btn);
+      });
+      $("upgrade").classList.remove("hidden");
+    }
 
     function hintAction(text) {
       const el = $("hurdle-hint"); el.textContent = text; el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
@@ -210,8 +367,11 @@
       state.arr += state.challenge.reward;
       $("challenge-box").classList.add("done");
       sfxChallenge();
-      showCallout(`+${fmt(state.challenge.reward)}!`);
-      setTimeout(() => { if (state.running) startNextChallenge(); }, 1800);
+      const bonus = Math.round(state.challenge.reward * state.multiplier);
+      state.arr += bonus - state.challenge.reward;
+      showCallout(`+${fmt(bonus)}!`);
+      showFloater(`+${fmt(bonus)} challenge`, "accent");
+      setTimeout(() => { if (state.running) showUpgradePick(); }, 900);
       updateHud();
     }
 
@@ -263,11 +423,11 @@
         const dist = to.length();
         if (dist > 28) continue;
         const dot = to.normalize().dot(aimDir);
-        if (dot < 0.94 || dist >= best) continue;
+        if (dot < aimDot() || dist >= best) continue;
         best = dist;
         target = ent;
       }
-      if (target?.type === "churn") { ch.classList.add("target"); ch.classList.remove("bad"); }
+      if (target?.type === "churn" || target?.type === "elite") { ch.classList.add("target"); ch.classList.remove("bad"); }
       else if (target?.type === "healthy") { ch.classList.add("bad"); ch.classList.remove("target"); }
       else { ch.classList.remove("target", "bad"); }
     }
@@ -365,6 +525,11 @@
         challenge: null, challengeDone: false,
         stats: { punches: 0, hurdles: 0, slides: 0, lanes: 0, coins: 0 },
         nextGauntletAt: 80, gauntletIdx: 0, lastDistHint: 0,
+        nextBossAt: 300, zoneName: "Connect", zoneSpeed: 1,
+        multiplier: 1, shield: 0, paused: false,
+        up: { fireRate: 0, aim: 0 },
+        power: { overcharge: 0, magnet: 0, slowmo: 0 },
+        dashCd: 0, invuln: 0, nearMisses: 0,
       };
       entities.forEach((e) => scene.remove(e.mesh)); entities = [];
       laserBolts.forEach((b) => { scene.remove(b.beam); scene.remove(b.glow); });
@@ -387,6 +552,21 @@
       }
     }
 
+    function dash(dir) {
+      if (state.dashCd > 0) return;
+      const next = THREE.MathUtils.clamp(playerLane + dir, 0, 2);
+      if (next === playerLane) return;
+      playerLane = next;
+      targetLaneX = LANES[playerLane];
+      player.position.x = targetLaneX;
+      laneLerp = 1;
+      state.dashCd = 0.85;
+      state.invuln = 0.22;
+      sfxDash();
+      bumpChallenge("lanes");
+      showFloater("DASH", "accent");
+    }
+
     function jump() {
       if (player.userData.jumpY <= 0.01 && player.userData.slideT <= 0) {
         player.userData.jumpVel = 7.5;
@@ -404,8 +584,8 @@
     }
 
     function shoot() {
-      if (state.fireCooldown > 0) return;
-      state.fireCooldown = 0.12;
+      if (state.fireCooldown > 0 || state.paused) return;
+      state.fireCooldown = Math.max(0.06, 0.12 * (1 - state.up.fireRate));
       gun.userData.recoil = 0.1;
       gun.userData.muzzleFlash = 1;
       sfxLaser();
@@ -416,37 +596,50 @@
       gun.userData.muzzle.getWorldPosition(muzzlePos);
       let best = null, bestDist = Infinity, hitPos = null;
       for (const ent of entities) {
-        if (ent.dead || (ent.type !== "churn" && ent.type !== "coin")) continue;
+        if (ent.dead || !["churn", "elite", "coin"].includes(ent.type)) continue;
         const wp = new THREE.Vector3();
         ent.mesh.getWorldPosition(wp);
         if (wp.z > 1.5 || wp.z < -35) continue;
         const to = wp.clone().sub(aimOrigin);
         const dist = to.length();
         if (dist > 28) continue;
-        if (to.normalize().dot(aimDir) < 0.94) continue;
+        if (to.normalize().dot(aimDir) < aimDot()) continue;
         if (dist < bestDist) { bestDist = dist; best = ent; hitPos = wp; }
       }
       const beamEnd = hitPos || aimOrigin.clone().add(aimDir.clone().multiplyScalar(24));
       spawnLaserBeam(muzzlePos, beamEnd);
       if (!best) { state.combo = 0; updateHud(); return; }
-      if (best.type === "churn") {
+      if (best.type === "churn" || best.type === "elite") {
+        if (best.type === "elite" && best.hp > 1) {
+          best.hp--;
+          shakeHud();
+          showFloater("SHIELD HIT", "bad");
+          sfxHit();
+          updateHud();
+          return;
+        }
         best.dead = true;
         state.combo++;
         state.maxCombo = Math.max(state.maxCombo, state.combo);
-        state.arr += Math.round(400 * state.speed * (1 + state.combo * 0.15));
+        const base = best.type === "elite" ? 700 : 400;
+        const gain = Math.round(base * state.speed * state.multiplier * (1 + state.combo * 0.15) * (state.power.overcharge > 0 ? 2 : 1));
+        state.arr += gain;
         bumpChallenge("punches");
+        if (state.combo >= 3) bumpMultiplier(0.05);
         if (state.challenge?.track === "maxCombo" && state.maxCombo >= state.challenge.goal) completeChallenge();
         showCombo(state.combo);
-        showCallout(state.combo >= 5 ? "KILL STREAK!" : "LASER HIT!");
+        showCallout(state.combo >= 5 ? "KILL STREAK!" : best.type === "elite" ? "ELITE DOWN!" : "LASER HIT!");
+        showFloater("+" + fmt(gain));
         spawnBurst(best.mesh.position, COLORS.churn);
         sfxHit();
+        shakeHud();
       } else if (best.type === "coin") collectCoin(best);
       updateHud();
     }
 
     function collectCoin(ent) {
       ent.dead = true;
-      state.arr += Math.round(250 * state.speed);
+      state.arr += Math.round(250 * state.speed * state.multiplier * (state.power.overcharge > 0 ? 1.5 : 1));
       bumpChallenge("coins");
       sfxCoin();
       spawnBurst(ent.mesh.position, COLORS.gold);
@@ -491,6 +684,29 @@
         case "churn":
           mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.55, 0), mat(COLORS.churn, 0.6));
           mesh.position.set(LANES[lane], 1.1, z);
+          break;
+        case "elite": {
+          const grp = new THREE.Group();
+          const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.72, 0), mat(COLORS.churn, 0.85));
+          const ring = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.04, 6, 20), mat(COLORS.gold, 0.9));
+          ring.rotation.x = Math.PI / 2;
+          grp.add(core, ring);
+          grp.position.set(LANES[lane], 1.15, z);
+          mesh = grp;
+          type = "elite";
+          break;
+        }
+        case "pickup_shield":
+          mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), mat(0x818cf8, 1));
+          mesh.position.set(LANES[lane], 1.0, z);
+          break;
+        case "pickup_overcharge":
+          mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), mat(0xfcd34d, 1));
+          mesh.position.set(LANES[lane], 1.0, z);
+          break;
+        case "pickup_magnet":
+          mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), mat(0x34d399, 1));
+          mesh.position.set(LANES[lane], 1.0, z);
           break;
         case "healthy":
           mesh = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.2, 0.5), mat(COLORS.healthy));
@@ -556,9 +772,32 @@
         mover: type === "mover",
         moverPhase: Math.random() * Math.PI * 2,
         cleared: false,
+        hp: type === "elite" ? 2 : 1,
+        nearMissed: false,
       };
       entities.push(ent);
       return ent;
+    }
+
+    function spawnBossWave() {
+      showCallout("CHURN SWARM!");
+      hintAction("Laser everything!");
+      for (let wave = 0; wave < 2; wave++) {
+        for (let lane = 0; lane < 3; lane++) {
+          makeEntity(state.zoneName === "Renewal Rush" || Math.random() < 0.35 ? "elite" : "churn", lane, state.spawnZ - wave * 3.2);
+        }
+      }
+      state.spawnZ -= 10;
+    }
+
+    function collectPickup(ent) {
+      ent.dead = true;
+      scene.remove(ent.mesh);
+      sfxPower();
+      if (ent.type === "pickup_shield") { state.shield++; showFloater("Shield +1", "accent"); }
+      if (ent.type === "pickup_overcharge") { state.power.overcharge = 8; showCallout("OVERDRIVE!"); }
+      if (ent.type === "pickup_magnet") { state.power.magnet = 7; showCallout("MAGNET!"); }
+      updateHud();
     }
 
     function spawnGauntlet() {
@@ -578,15 +817,17 @@
       const roll = Math.random();
       const z = state.spawnZ;
       let type;
-      if (roll < 0.22) type = "churn";
-      else if (roll < 0.32) type = "healthy";
-      else if (roll < 0.42) type = "hurdle";
-      else if (roll < 0.52) type = "beam";
-      else if (roll < 0.60) type = "gap";
-      else if (roll < 0.67) type = "spike";
-      else if (roll < 0.74) type = "mover";
-      else if (roll < 0.80) type = "gate";
-      else if (roll < 0.88) type = "obstacle";
+      const eliteChance = state.zoneName === "Deploy" ? 0.12 : state.zoneName === "Renewal Rush" ? 0.2 : 0.05;
+      if (roll < 0.04 && state.dist > 60) type = ["pickup_shield", "pickup_overcharge", "pickup_magnet"][Math.floor(Math.random() * 3)];
+      else if (roll < 0.24) type = Math.random() < eliteChance ? "elite" : "churn";
+      else if (roll < 0.34) type = "healthy";
+      else if (roll < 0.44) type = "hurdle";
+      else if (roll < 0.54) type = "beam";
+      else if (roll < 0.62) type = "gap";
+      else if (roll < 0.69) type = "spike";
+      else if (roll < 0.76) type = "mover";
+      else if (roll < 0.82) type = "gate";
+      else if (roll < 0.90) type = "obstacle";
       else type = "coin";
       makeEntity(type, lane, z);
       state.spawnZ -= 4.5 + Math.random() * 3.5;
@@ -604,22 +845,33 @@
         if (Math.abs(ez - pz) > 1.1) continue;
 
         if (ent.type === "coin") {
-          if (ent.lane === playerLane || ent.mesh.position.distanceTo(player.position) < 1.5) collectCoin(ent);
+          const pull = state.power.magnet > 0;
+          if (pull) {
+            const dx = player.position.x - ent.mesh.position.x;
+            ent.mesh.position.x += dx * 0.18;
+            if (Math.abs(dx) < 0.5 && Math.abs(ez - pz) < 1.4) collectCoin(ent);
+          } else if (ent.lane === playerLane || ent.mesh.position.distanceTo(player.position) < 1.5) collectCoin(ent);
+          continue;
+        }
+
+        if (ent.type.startsWith("pickup_")) {
+          if (Math.abs(ent.mesh.position.x - player.position.x) < 1.2 && Math.abs(ez - pz) < 1.1) collectPickup(ent);
           continue;
         }
 
         if (ent.type === "gate") {
           if (py > 0.55) {
-            if (!ent.cleared) { ent.cleared = true; bumpChallenge("hurdles"); sfxHurdle(); }
+            if (!ent.cleared) { ent.cleared = true; bumpChallenge("hurdles"); sfxHurdle(); rewardPerfect(); }
             continue;
           }
+          if (state.invuln > 0) continue;
           crash();
           return;
         }
 
         if (ent.dead || ent.lane !== playerLane) continue;
 
-        if (ent.type === "churn") continue; // shoot only
+        if (ent.type === "churn" || ent.type === "elite") continue;
 
         if (ent.type === "healthy") {
           state.combo = 0;
@@ -637,29 +889,48 @@
 
         if (jumpTypes.includes(ent.type)) {
           if (py > 0.5) {
-            if (!ent.cleared) { ent.cleared = true; bumpChallenge("hurdles"); sfxHurdle(); }
+            if (!ent.cleared) { ent.cleared = true; bumpChallenge("hurdles"); sfxHurdle(); rewardPerfect(); }
             continue;
           }
+          if (state.invuln > 0) continue;
           crash();
           return;
         }
         if (slideTypes.includes(ent.type)) {
           if (sliding) {
-            if (!ent.cleared) { ent.cleared = true; bumpChallenge("hurdles"); sfxHurdle(); }
+            if (!ent.cleared) { ent.cleared = true; bumpChallenge("hurdles"); sfxHurdle(); rewardPerfect(); }
             continue;
           }
+          if (state.invuln > 0) continue;
           crash();
           return;
         }
         if (ent.type === "mover") {
           if (py > 0.45) continue;
+          if (state.invuln > 0) continue;
           crash();
           return;
         }
       }
     }
 
+    function rewardPerfect() {
+      bumpMultiplier(0.08);
+      state.arr += Math.round(120 * state.multiplier);
+      showFloater("PERFECT!", "accent");
+    }
+
     function crash() {
+      if (state.shield > 0) {
+        state.shield--;
+        state.invuln = 0.6;
+        state.combo = 0;
+        shakeHud();
+        showCallout("SHIELD!");
+        showFloater("Shield saved you", "accent");
+        updateHud();
+        return;
+      }
       state.gameOver = true;
       state.running = false;
       document.exitPointerLock?.();
@@ -668,7 +939,7 @@
       const newBest = state.arr > best;
       if (newBest) localStorage.setItem(BEST_KEY, String(state.arr));
       $("end-title").textContent = "Run crashed.";
-      $("end-stats").textContent = `${fmt(state.arr)} · ${Math.round(state.dist)}m · ${state.challengesCompleted} challenges · ${state.maxCombo}× best combo`;
+      $("end-stats").textContent = `${fmt(state.arr)} · ${Math.round(state.dist)}m · ${state.zoneName} · ${state.challengesCompleted} challenges · ${state.maxCombo}× streak · ${state.multiplier.toFixed(1)}× mult`;
       $("end-best").textContent = newBest ? "New best run!" : best > 0 ? `Best: ${fmt(best)}` : "";
       $("end").classList.remove("hidden");
       $("hud").style.visibility = "hidden";
@@ -680,6 +951,10 @@
       $("t-spd").textContent = state.speed.toFixed(1);
       $("t-combo").textContent = state.combo;
       $("t-challenges").textContent = state.challengesCompleted;
+      $("t-mult").textContent = state.multiplier.toFixed(1);
+      $("t-shield").textContent = state.shield;
+      $("pill-shield").classList.toggle("shield-on", state.shield > 0);
+      updatePowerHud();
       updateChallengeHud();
       if (state.challenge?.track === "dist" && state.dist >= state.challenge.goal) completeChallenge();
     }
@@ -701,11 +976,21 @@
       requestAnimationFrame(animate);
       const dt = Math.min(clock.getDelta(), 0.05);
 
-      if (state.running && !state.gameOver) {
-        state.speed = Math.min(3.2, 1 + state.dist * 0.004);
+      if (state.running && !state.gameOver && !state.paused) {
+        checkZones();
+        tickPowerups(dt);
+        if (state.dashCd > 0) state.dashCd -= dt;
+        if (state.invuln > 0) state.invuln -= dt;
+
+        state.speed = Math.min(3.8, (1 + state.dist * 0.004) * state.zoneSpeed);
+        const rush = state.speed >= 2.5;
+        $("vignette").className = "vignette" + (rush ? " rush" : state.combo >= 4 ? " danger" : "");
+        camera.fov = THREE.MathUtils.lerp(camera.fov, FOV + (rush ? 8 : 0), dt * 3);
+        camera.updateProjectionMatrix();
+
         const scroll = 9 * state.speed * dt;
         state.dist += scroll;
-        state.arr += scroll * 2;
+        state.arr += scroll * 2 * state.multiplier;
 
         trackChunks.forEach((c) => {
           c.position.z += scroll;
@@ -716,9 +1001,23 @@
           if (ent.dead) return;
           ent.mesh.position.z += scroll;
           if (ent.type === "coin") ent.mesh.rotation.y += dt * 5;
-          if (ent.type === "churn") {
+          if (ent.type === "churn" || ent.type === "elite") {
             ent.mesh.rotation.x += dt * 2;
-            ent.mesh.position.y = 1.1 + Math.sin(clock.elapsedTime * 6) * 0.08;
+            const bob = ent.type === "elite" ? 1.15 : 1.1;
+            ent.mesh.position.y = bob + Math.sin(clock.elapsedTime * 6) * 0.08;
+            if (!ent.nearMissed && ent.lane === playerLane && ent.mesh.position.z > 0.8 && ent.mesh.position.z < 2.2) {
+              ent.nearMissed = true;
+              state.nearMisses++;
+              const bonus = Math.round(180 * state.multiplier);
+              state.arr += bonus;
+              bumpMultiplier(0.06);
+              sfxNear();
+              showFloater("NEAR MISS +" + fmt(bonus), "accent");
+            }
+          }
+          if (ent.type.startsWith("pickup_")) {
+            ent.mesh.rotation.y += dt * 4;
+            ent.mesh.position.y = 1.0 + Math.sin(clock.elapsedTime * 5) * 0.1;
           }
           if (ent.mover) {
             ent.moverPhase += dt * 2.2;
@@ -729,7 +1028,7 @@
           if (ent.mesh.position.z > 8) {
             ent.dead = true;
             scene.remove(ent.mesh);
-            if (ent.type === "churn") state.combo = 0;
+            if (ent.type === "churn" || ent.type === "elite") state.combo = 0;
           }
         });
         entities = entities.filter((e) => !e.dead);
@@ -737,6 +1036,11 @@
         if (state.dist >= state.nextGauntletAt) {
           state.nextGauntletAt += 70 + state.gauntletIdx * 8;
           spawnGauntlet();
+        }
+
+        if (state.dist >= state.nextBossAt) {
+          state.nextBossAt += 280;
+          spawnBossWave();
         }
 
         state.spawnAcc += scroll;
@@ -794,6 +1098,11 @@
         if (keys["ArrowRight"] || keys["KeyD"]) { keys["ArrowRight"] = false; keys["KeyD"] = false; switchLane(1); }
         if (keys["Space"] || keys["ArrowUp"] || keys["KeyW"]) { keys["Space"] = false; keys["ArrowUp"] = false; keys["KeyW"] = false; jump(); }
         if (keys["ArrowDown"] || keys["KeyS"]) { keys["ArrowDown"] = false; keys["KeyS"] = false; slide(); }
+        if (keys["ShiftLeft"] || keys["ShiftRight"]) {
+          const d = keys["ShiftLeft"] ? -1 : 1;
+          keys["ShiftLeft"] = false; keys["ShiftRight"] = false;
+          dash(d);
+        }
         if (keys["click"]) { keys["click"] = false; shoot(); }
 
         collide();
