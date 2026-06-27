@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Renewal Rush — Runner Fight</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --accent: #6366f1; --bg: #0a0a0a; --surface: #171717; --border: #333;
+      --text: #fafafa; --muted: #a3a3a3; --gold: #fcd34d; --red: #f87171; --green: #34d399;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); font-family: Inter, system-ui, sans-serif; }
+    #canvas { display: block; width: 100%; height: 100%; }
+    .hud { position: fixed; inset: 0; pointer-events: none; z-index: 2; padding: 14px 18px; display: flex; flex-direction: column; justify-content: space-between; color: var(--text); }
+    .hud-top { display: flex; justify-content: space-between; align-items: flex-start; }
+    .hud-top img { height: 22px; }
+    .title-sm { font-size: 0.75rem; font-weight: 700; margin-top: 4px; }
+    .stats { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .pill { font-family: "IBM Plex Mono", monospace; font-size: 0.62rem; padding: 6px 10px; border-radius: 8px; background: #171717cc; border: 1px solid var(--border); backdrop-filter: blur(10px); }
+    .pill strong { color: var(--accent); }
+    .pill.gold strong { color: var(--gold); }
+    .combo { text-align: center; font-size: 1.8rem; font-weight: 800; color: var(--gold); opacity: 0; text-shadow: 0 4px 20px #000; transition: opacity 0.1s; }
+    .combo.on { opacity: 1; animation: combo-pop 0.35s ease; }
+    @keyframes combo-pop { 0% { transform: scale(0.7); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+    .banner { align-self: center; font-size: 0.72rem; color: var(--muted); background: #171717aa; border: 1px solid var(--border); padding: 8px 14px; border-radius: 10px; }
+    .overlay { position: fixed; inset: 0; background: #000c; display: grid; place-items: center; z-index: 10; padding: 20px; }
+    .overlay.hidden { display: none; }
+    .modal { max-width: 400px; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 28px; text-align: center; }
+    .modal h2 { font-size: 1.45rem; margin: 10px 0 8px; letter-spacing: -0.03em; }
+    .modal p { color: var(--muted); font-size: 0.88rem; line-height: 1.5; margin-bottom: 18px; }
+    .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; text-align: left; margin-bottom: 18px; font-size: 0.72rem; color: var(--muted); }
+    .controls span { color: var(--text); font-weight: 600; }
+    .btn { width: 100%; background: var(--accent); color: #fff; border: none; border-radius: 10px; padding: 13px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
+    .callout { position: fixed; left: 50%; top: 28%; transform: translateX(-50%); font-weight: 800; font-size: 1.5rem; color: var(--gold); opacity: 0; pointer-events: none; z-index: 5; }
+    .callout.show { animation: co 1s ease forwards; }
+    @keyframes co { 0% { opacity: 0; transform: translateX(-50%) scale(0.6); } 20% { opacity: 1; transform: translateX(-50%) scale(1.1); } 100% { opacity: 0; transform: translateX(-50%) translateY(-24px); } }
+    a.back { position: fixed; bottom: 10px; left: 12px; font-size: 0.68rem; color: #555; z-index: 5; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div class="callout" id="callout"></div>
+  <div class="hud" id="hud" style="visibility:hidden">
+    <div class="hud-top">
+      <div><img src="assets/brand/quivly-logo-forest-white.webp" alt="" /><div class="title-sm">Renewal Run</div></div>
+      <div class="stats">
+        <div class="pill gold">ARR <strong id="t-arr">$0</strong></div>
+        <div class="pill">Dist <strong id="t-dist">0</strong>m</div>
+        <div class="pill">Speed <strong id="t-spd">1.0</strong>×</div>
+        <div class="pill">Fight <strong id="t-combo">0</strong>×</div>
+      </div>
+    </div>
+    <div class="combo" id="combo-display"></div>
+    <div class="banner" id="banner">Subway-style run — dodge green · punch red churn</div>
+  </div>
+  <a class="back" href="index.html">← Game Lab</a>
+
+  <div class="overlay" id="title">
+    <div class="modal">
+      <img src="assets/brand/quivly-logo-forest-white.webp" alt="" />
+      <h2>Renewal Run</h2>
+      <p>Endless runner + fighter. Sprint the renewal track, lane-switch like Subway Surfers, punch churn drones, jump obstacles.</p>
+      <div class="controls">
+        <div><span>← → / A D</span> switch lane</div>
+        <div><span>Space</span> jump</div>
+        <div><span>J / Click</span> punch fight</div>
+        <div><span>↓ / S</span> slide (brief)</div>
+      </div>
+      <button class="btn" id="start">Start run</button>
+    </div>
+  </div>
+  <div class="overlay hidden" id="end">
+    <div class="modal">
+      <h2 id="end-title">Run over</h2>
+      <p id="end-stats" style="font-family:monospace;font-size:0.82rem"></p>
+      <p id="end-best" style="color:var(--gold);font-size:0.75rem;margin:8px 0 16px"></p>
+      <button class="btn" id="replay">Run again →</button>
+    </div>
+  </div>
+
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+
+    const LANES = [-2.2, 0, 2.2];
+    const BEST_KEY = "renewal-rush-runner-best";
+    const COLORS = { track: 0x0e0e14, accent: 0x6366f1, churn: 0xf87171, healthy: 0x34d399, gold: 0xfcd34d, obstacle: 0x52525b };
+
+    let renderer, scene, camera, clock;
+    let player, playerLane = 1, targetLaneX = 0, laneLerp = 0;
+    let trackChunks = [], entities = [], particles = [];
+    let state = {}, keys = {}, audioCtx = null;
+
+    function $(id) { return document.getElementById(id); }
+    function fmt(n) { return n >= 1000 ? "$" + Math.round(n / 1000) + "K" : "$" + Math.round(n); }
+
+    function tone(f, d, type = "square", v = 0.05) {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      const t0 = audioCtx.currentTime, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = type; o.frequency.value = f;
+      g.gain.setValueAtTime(v, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + d);
+      o.connect(g).connect(audioCtx.destination); o.start(t0); o.stop(t0 + d);
+    }
+    function sfxLane() { tone(440, 0.05); }
+    function sfxJump() { tone(520, 0.08, "sine", 0.06); }
+    function sfxPunch() { tone(180, 0.06, "sawtooth", 0.07); tone(320, 0.04, "square", 0.04); }
+    function sfxHit() { tone(880, 0.07, "triangle", 0.06); }
+    function sfxCoin() { tone(1200, 0.05, "sine", 0.05); }
+    function sfxCrash() { tone(90, 0.25, "sawtooth", 0.08); }
+
+    function showCallout(t) {
+      const el = $("callout"); el.textContent = t; el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
+    }
+    function showCombo(n) {
+      const el = $("combo-display");
+      el.textContent = n > 1 ? `${n}× FIGHT COMBO` : "";
+      el.classList.toggle("on", n > 1);
+    }
+
+    function initThree() {
+      renderer = new THREE.WebGLRenderer({ canvas: $("canvas"), antialias: true, powerPreference: "high-performance" });
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      renderer.setSize(innerWidth, innerHeight);
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x08080f);
+      scene.fog = new THREE.Fog(0x08080f, 8, 42);
+
+      camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 80);
+      camera.position.set(0, 4.2, 7);
+      camera.lookAt(0, 1.2, -6);
+
+      scene.add(new THREE.HemisphereLight(0x6366f1, 0x0a0a0a, 0.6));
+      const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+      sun.position.set(2, 8, 4); scene.add(sun);
+      const rim = new THREE.PointLight(0x6366f1, 1.2, 20);
+      rim.position.set(0, 3, 2); scene.add(rim);
+
+      // Player agent
+      const body = new THREE.Mesh(
+        new THREE.CapsuleGeometry(0.35, 0.9, 6, 12),
+        new THREE.MeshStandardMaterial({ color: 0x6366f1, emissive: 0x6366f1, emissiveIntensity: 0.25, metalness: 0.4, roughness: 0.3 })
+      );
+      body.position.y = 1.05;
+      const fistL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshStandardMaterial({ color: 0x818cf8 }));
+      fistL.position.set(-0.45, 1.0, -0.2);
+      const fistR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshStandardMaterial({ color: 0x818cf8 }));
+      fistR.position.set(0.45, 1.0, -0.2);
+      player = new THREE.Group();
+      player.add(body, fistL, fistR);
+      player.userData = { fistL, fistR, body, jumpY: 0, jumpVel: 0, slideT: 0, punchT: 0 };
+      player.position.set(0, 0, 0);
+      scene.add(player);
+
+      for (let i = 0; i < 8; i++) addTrackChunk(-i * 10);
+      clock = new THREE.Clock();
+    }
+
+    function addTrackChunk(zBase) {
+      const group = new THREE.Group();
+      group.position.z = zBase;
+      const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(8, 10),
+        new THREE.MeshStandardMaterial({ color: COLORS.track, metalness: 0.6, roughness: 0.35 })
+      );
+      floor.rotation.x = -Math.PI / 2;
+      group.add(floor);
+      LANES.forEach((lx) => {
+        const line = new THREE.Mesh(
+          new THREE.PlaneGeometry(0.04, 10),
+          new THREE.MeshBasicMaterial({ color: COLORS.accent, transparent: true, opacity: 0.35 })
+        );
+        line.rotation.x = -Math.PI / 2;
+        line.position.set(lx, 0.01, 0);
+        group.add(line);
+      });
+      const rail = new THREE.Mesh(
+        new THREE.BoxGeometry(8.4, 0.3, 0.3),
+        new THREE.MeshStandardMaterial({ color: 0x1a1a24 })
+      );
+      rail.position.set(0, 0.15, -5);
+      group.add(rail);
+      scene.add(group);
+      trackChunks.push(group);
+    }
+
+    function initState() {
+      state = {
+        running: false, gameOver: false, arr: 0, dist: 0, speed: 1, combo: 0,
+        spawnZ: -25, spawnAcc: 0, punchCooldown: 0,
+      };
+      entities.forEach((e) => scene.remove(e.mesh)); entities = [];
+      playerLane = 1;
+      targetLaneX = LANES[1];
+      player.position.set(0, 0, 0);
+      player.userData.jumpY = 0;
+      player.userData.jumpVel = 0;
+      player.userData.slideT = 0;
+      player.userData.punchT = 0;
+    }
+
+    function switchLane(dir) {
+      const next = THREE.MathUtils.clamp(playerLane + dir, 0, 2);
+      if (next !== playerLane) { playerLane = next; targetLaneX = LANES[playerLane]; laneLerp = 0; sfxLane(); }
+    }
+
+    function jump() {
+      if (player.userData.jumpY <= 0.01 && player.userData.slideT <= 0) {
+        player.userData.jumpVel = 7.5;
+        sfxJump();
+      }
+    }
+
+    function slide() {
+      if (player.userData.jumpY <= 0.01) player.userData.slideT = 0.45;
+    }
+
+    function punch() {
+      if (state.punchCooldown > 0) return;
+      state.punchCooldown = 0.22;
+      player.userData.punchT = 0.18;
+      sfxPunch();
+      const hitZ = -2.2;
+      let hit = false;
+      entities.forEach((ent) => {
+        if (ent.dead || ent.lane !== playerLane) return;
+        if (Math.abs(ent.mesh.position.z - hitZ) > 1.8) return;
+        if (ent.type === "churn" || ent.type === "coin") {
+          if (ent.type === "churn") {
+            ent.dead = true;
+            state.combo++;
+            state.arr += Math.round(400 * state.speed * (1 + state.combo * 0.15));
+            showCombo(state.combo);
+            showCallout(state.combo >= 5 ? "FIGHT STREAK!" : "PUNCH!");
+            spawnBurst(ent.mesh.position, COLORS.churn);
+            sfxHit();
+          }
+          if (ent.type === "coin") collectCoin(ent);
+          hit = true;
+        }
+      });
+      if (!hit) state.combo = 0;
+      updateHud();
+    }
+
+    function collectCoin(ent) {
+      ent.dead = true;
+      state.arr += Math.round(250 * state.speed);
+      sfxCoin();
+      spawnBurst(ent.mesh.position, COLORS.gold);
+      updateHud();
+    }
+
+    function spawnBurst(pos, color) {
+      for (let i = 0; i < 6; i++) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), new THREE.MeshBasicMaterial({ color }));
+        m.position.copy(pos);
+        scene.add(m);
+        particles.push({
+          mesh: m,
+          vel: new THREE.Vector3((Math.random() - 0.5) * 3, Math.random() * 3, (Math.random() - 0.5) * 3),
+          life: 0.5,
+        });
+      }
+    }
+
+    function spawnEntity() {
+      const lane = Math.floor(Math.random() * 3);
+      const roll = Math.random();
+      let type, mesh;
+      const z = state.spawnZ;
+
+      if (roll < 0.38) {
+        type = "churn";
+        mesh = new THREE.Mesh(
+          new THREE.OctahedronGeometry(0.55, 0),
+          new THREE.MeshStandardMaterial({ color: COLORS.churn, emissive: COLORS.churn, emissiveIntensity: 0.6, flatShading: true })
+        );
+        mesh.position.set(LANES[lane], 1.1, z);
+      } else if (roll < 0.58) {
+        type = "healthy";
+        mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(1.1, 1.2, 0.5),
+          new THREE.MeshStandardMaterial({ color: COLORS.healthy, emissive: COLORS.healthy, emissiveIntensity: 0.3 })
+        );
+        mesh.position.set(LANES[lane], 0.6, z);
+      } else if (roll < 0.72) {
+        type = "obstacle";
+        mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(1.4, 0.9, 0.6),
+          new THREE.MeshStandardMaterial({ color: COLORS.obstacle, metalness: 0.5, roughness: 0.4 })
+        );
+        mesh.position.set(LANES[lane], 0.45, z);
+      } else if (roll < 0.88) {
+        type = "low";
+        mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(1.6, 0.5, 0.5),
+          new THREE.MeshStandardMaterial({ color: COLORS.obstacle })
+        );
+        mesh.position.set(LANES[lane], 0.55, z);
+      } else {
+        type = "coin";
+        mesh = new THREE.Mesh(
+          new THREE.OctahedronGeometry(0.22, 0),
+          new THREE.MeshStandardMaterial({ color: COLORS.gold, emissive: COLORS.gold, emissiveIntensity: 0.8 })
+        );
+        mesh.position.set(LANES[lane], 0.9 + Math.random() * 0.8, z);
+      }
+
+      scene.add(mesh);
+      entities.push({ mesh, type, lane, dead: false });
+      state.spawnZ -= 5 + Math.random() * 4;
+    }
+
+    function collide() {
+      const px = player.position.x;
+      const py = player.userData.jumpY;
+      const sliding = player.userData.slideT > 0;
+      const hitH = sliding ? 0.6 : 1.0;
+      const pz = -0.5;
+
+      for (const ent of entities) {
+        if (ent.dead || ent.lane !== playerLane) continue;
+        const ez = ent.mesh.position.z;
+        if (Math.abs(ez - pz) > 1.1) continue;
+
+        if (ent.type === "coin") { collectCoin(ent); continue; }
+
+        if (ent.type === "churn") continue; // punch only
+
+        if (ent.type === "healthy") {
+          state.combo = 0;
+          state.arr = Math.max(0, state.arr - 200);
+          ent.dead = true;
+          scene.remove(ent.mesh);
+          showCallout("Wrong tag!");
+          sfxCrash();
+          updateHud();
+          continue;
+        }
+
+        if (ent.type === "obstacle") {
+          if (py > 0.55) continue;
+          crash();
+          return;
+        }
+        if (ent.type === "low") {
+          if (sliding) continue;
+          crash();
+          return;
+        }
+      }
+    }
+
+    function crash() {
+      state.gameOver = true;
+      state.running = false;
+      sfxCrash();
+      const best = Number(localStorage.getItem(BEST_KEY) || 0);
+      const newBest = state.arr > best;
+      if (newBest) localStorage.setItem(BEST_KEY, String(state.arr));
+      $("end-title").textContent = "Run crashed.";
+      $("end-stats").textContent = `${fmt(state.arr)} · ${Math.round(state.dist)}m · ${state.combo} best combo · ${state.speed.toFixed(1)}× top speed`;
+      $("end-best").textContent = newBest ? "New best run!" : best > 0 ? `Best: ${fmt(best)}` : "";
+      $("end").classList.remove("hidden");
+      $("hud").style.visibility = "hidden";
+    }
+
+    function updateHud() {
+      $("t-arr").textContent = fmt(state.arr);
+      $("t-dist").textContent = Math.round(state.dist);
+      $("t-spd").textContent = state.speed.toFixed(1);
+      $("t-combo").textContent = state.combo;
+    }
+
+    function startRun() {
+      initState();
+      state.running = true;
+      $("title").classList.add("hidden");
+      $("end").classList.add("hidden");
+      $("hud").style.visibility = "visible";
+      showCallout("GO!");
+      updateHud();
+      if (audioCtx?.state === "suspended") audioCtx.resume();
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+
+      if (state.running && !state.gameOver) {
+        state.speed = Math.min(3.2, 1 + state.dist * 0.004);
+        const scroll = 9 * state.speed * dt;
+        state.dist += scroll;
+        state.arr += scroll * 2;
+
+        trackChunks.forEach((c) => {
+          c.position.z += scroll;
+          if (c.position.z > 12) c.position.z -= 80;
+        });
+
+        entities.forEach((ent) => {
+          if (ent.dead) return;
+          ent.mesh.position.z += scroll;
+          if (ent.type === "coin") ent.mesh.rotation.y += dt * 5;
+          if (ent.type === "churn") {
+            ent.mesh.rotation.x += dt * 2;
+            ent.mesh.position.y = 1.1 + Math.sin(clock.elapsedTime * 6) * 0.08;
+          }
+          if (ent.mesh.position.z > 8) {
+            ent.dead = true;
+            scene.remove(ent.mesh);
+            if (ent.type === "churn") state.combo = 0;
+          }
+        });
+        entities = entities.filter((e) => !e.dead);
+
+        state.spawnAcc += scroll;
+        if (state.spawnAcc > 6) { state.spawnAcc = 0; spawnEntity(); }
+
+        laneLerp = Math.min(1, laneLerp + dt * 14);
+        player.position.x = THREE.MathUtils.lerp(player.position.x, targetLaneX, laneLerp);
+
+        const ud = player.userData;
+        if (ud.jumpVel !== 0 || ud.jumpY > 0) {
+          ud.jumpVel -= 22 * dt;
+          ud.jumpY = Math.max(0, ud.jumpY + ud.jumpVel * dt);
+          if (ud.jumpY <= 0) ud.jumpVel = 0;
+        }
+        if (ud.slideT > 0) ud.slideT -= dt;
+        if (ud.punchT > 0) ud.punchT -= dt;
+        ud.body.position.y = 1.05 + ud.jumpY;
+        ud.body.scale.y = ud.slideT > 0 ? 0.55 : 1;
+        ud.fistR.position.z = ud.punchT > 0 ? -0.7 : -0.2;
+        ud.fistL.position.z = ud.punchT > 0 ? -0.5 : -0.2;
+        player.position.y = 0;
+
+        if (state.punchCooldown > 0) state.punchCooldown -= dt;
+
+        if (keys["ArrowLeft"] || keys["KeyA"]) { keys["ArrowLeft"] = false; keys["KeyA"] = false; switchLane(-1); }
+        if (keys["ArrowRight"] || keys["KeyD"]) { keys["ArrowRight"] = false; keys["KeyD"] = false; switchLane(1); }
+        if (keys["Space"] || keys["ArrowUp"] || keys["KeyW"]) { keys["Space"] = false; keys["ArrowUp"] = false; keys["KeyW"] = false; jump(); }
+        if (keys["ArrowDown"] || keys["KeyS"]) { keys["ArrowDown"] = false; keys["KeyS"] = false; slide(); }
+        if (keys["KeyJ"] || keys["click"]) { keys["KeyJ"] = false; keys["click"] = false; punch(); }
+
+        collide();
+        updateHud();
+
+        camera.position.x = THREE.MathUtils.lerp(camera.position.x, player.position.x * 0.35, dt * 4);
+        camera.lookAt(player.position.x * 0.2, 1.3, -5);
+      }
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life -= dt;
+        p.mesh.position.addScaledVector(p.vel, dt);
+        p.vel.y -= 8 * dt;
+        if (p.life <= 0) { scene.remove(p.mesh); particles.splice(i, 1); }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    initThree();
+    animate();
+
+    $("start").onclick = startRun;
+    $("replay").onclick = () => { $("end").classList.add("hidden"); $("title").classList.remove("hidden"); };
+    window.addEventListener("keydown", (e) => { keys[e.code] = true; });
+    window.addEventListener("keyup", (e) => { keys[e.code] = false; });
+    $("canvas").addEventListener("pointerdown", () => { if (state.running) keys["click"] = true; });
+    window.addEventListener("resize", () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+  </script>
+</body>
+</html>

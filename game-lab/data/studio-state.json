@@ -11,14 +11,14 @@
     "phase": "web-polish",
     "currentLesson": "lesson-03-signal-triage",
     "agentStatus": "ready",
-    "agentMessage": "Hero Shooter live — renewal-rush-hero.html. Pick Agent Pulse, Stack Runner, or Signal Sniper. Shoot churn drones, tag at-risk signals, E for ult.",
+    "agentMessage": "Runner + Fight live — renewal-rush-runner.html. Subway Surfers lanes + punch combat. A/D lanes, Space jump, J punch churn. Speed ramps, chase best ARR.",
     "mcpConnected": false,
     "mcpUrl": "http://127.0.0.1:8000/mcp",
     "unrealRunning": false
   },
   "liveArtifact": {
-    "title": "Renewal Rush — Hero Shooter",
-    "type": "renewal-rush-hero.html",
+    "title": "Renewal Run — Runner + Fight",
+    "type": "renewal-rush-runner.html",
     "highlight": "game"
   },
   "nextActions": [
