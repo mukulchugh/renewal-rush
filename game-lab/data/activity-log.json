@@ -59,6 +59,11 @@
       "time": "2026-06-27T15:00:00Z",
       "who": "agent",
       "text": "Pushed to GitHub: github.com/mukulchugh/renewal-rush (private, Git LFS for Content assets)"
+    },
+    {
+      "time": "2026-06-27T20:30:00Z",
+      "who": "agent",
+      "text": "Premise locked: Signal Triage (Whack-a-Risk) — browser-first, Unreal demoted to sandbox. Validation test PASS."
     }
   ]
 }

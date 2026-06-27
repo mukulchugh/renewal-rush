@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-27T19:55:00Z",
+  "updatedAt": "2026-06-27T20:30:00Z",
   "project": {
     "name": "MyProject",
     "repo": "https://github.com/mukulchugh/renewal-rush",
@@ -8,23 +8,23 @@
     "path": "/Users/mukulchugh/Documents/Unreal Projects/MyProject"
   },
   "session": {
-    "phase": "loop-polish-pass-2-complete",
-    "currentLesson": "lesson-02",
+    "phase": "premise-locked",
+    "currentLesson": "lesson-03-signal-triage",
     "agentStatus": "ready",
-    "agentMessage": "Loop pass 2 complete: Quivly lighting tuned, sky hidden, gun meshes hidden. Press Play to preview Agent Pulse arena.",
+    "agentMessage": "Premise locked: Signal Triage (Whack-a-Risk) — browser-first. Next: prototype in Game Lab canvas.",
     "mcpConnected": true,
     "mcpUrl": "http://127.0.0.1:8000/mcp",
     "unrealRunning": true
   },
   "liveArtifact": {
-    "title": "Lvl_ArenaShooter — polish pass 2",
-    "type": "level",
-    "highlight": "agent"
+    "title": "Signal Triage — premise doc",
+    "type": "game-script",
+    "highlight": "premiseResearch"
   },
   "nextActions": [
-    "Press Play — confirm no gun visible, dark indigo mood",
-    "Next loop: spawn account orb actors (green/amber/red emissive)",
-    "Next loop: Blueprint timer + ARR score HUD (90s)"
+    "Prototype Signal Triage in game-lab/index.html (canvas)",
+    "Account card: ARR, health score, usage delta on each pop",
+    "Spawn logic + 90s timer + rank titles on end screen"
   ],
   "userInputPending": []
 }

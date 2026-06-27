@@ -1,0 +1,89 @@
+{
+  "collectedAt": "2026-06-27T21:00:00Z",
+  "method": "Firecrawl search+scrape of benchmark URLs; quivly.ai landing scrape; internal arena-discovery.json",
+  "artifacts": [
+    {
+      "id": "pagertron-page",
+      "path": ".firecrawl/pagertron.md",
+      "sourceUrl": "https://incident.io/anthropic",
+      "fetchedAt": "2026-06-27T14:00:00Z"
+    },
+    {
+      "id": "pagertron-blog",
+      "path": ".firecrawl/search-saas-mini-games.json",
+      "sourceUrl": "https://incident.io/blog/why-we-vibe-coded-a-marketing-campaign-for-anthropic",
+      "fetchedAt": "2026-06-27T14:00:00Z"
+    },
+    {
+      "id": "wizlympics-blog",
+      "path": ".firecrawl/search-wizlympics.json",
+      "sourceUrl": "https://www.wiz.io/blog/wizlympics-the-first-cloud-security-olympic-games",
+      "fetchedAt": "2026-06-27T14:00:00Z"
+    },
+    {
+      "id": "toggl-simulator",
+      "path": ".firecrawl/search-toggl-sim.json",
+      "sourceUrl": "https://toggl.com/startup-simulator/",
+      "fetchedAt": "2026-06-27T14:00:00Z"
+    },
+    {
+      "id": "quivly-landing",
+      "path": "data/quivly-landing.json",
+      "sourceUrl": "https://www.quivly.ai",
+      "fetchedAt": "2026-06-27T12:00:00Z"
+    },
+    {
+      "id": "arena-discovery",
+      "path": "data/arena-discovery.json",
+      "sourceUrl": "internal: Lvl_ArenaShooter MCP discover_arena.py",
+      "fetchedAt": "2026-06-27T14:30:00Z"
+    }
+  ],
+  "benchmarks": {
+    "PagerTron": {
+      "verbatimQuotes": [
+        "Escape the pager duty // incident.io",
+        "Your pager has a paging problem.",
+        "The tool that wakes you up... breaks.",
+        "Press Spacebar to Start",
+        "VIEW LEADERBOARD"
+      ],
+      "blogQuotes": [
+        "a game called PagerTron, which we vibe-coded up just for Anthropic in Claude Code",
+        "build a simple game like that with a database of high scores"
+      ]
+    },
+    "Wizlympics": {
+      "verbatimQuotes": [
+        "distinguishing between real and fake cloud services",
+        "Use the Wiz Sensor to avoid fake cloud services, like Amazon Prime Rib, and collect real cloud services, like AWS S3",
+        "Collecting real services and avoiding fake cloud services will earn you 10 points, while collecting a fake cloud service results in game over",
+        "win a Wiz swag box if you hit 500 points or more"
+      ]
+    },
+    "Unicorn Startup Simulator": {
+      "verbatimQuotes": [
+        "Create a Billion Dollar Start-Up or Die Trying",
+        "Your goal is to have a valuation of at least $1 billion by the end of the year",
+        "Use your time wisely!",
+        "Also, make sure to keep your employees happy :)"
+      ],
+      "note": "Story fields use only toggl.com/startup-simulator/ tutorial + og:description — not third-party review embellishments."
+    },
+    "Renewal Rush (Unreal FPS)": {
+      "internalMetrics": {
+        "actorCount": 139,
+        "source": "arena-discovery.json all_labels length",
+        "level": "Lvl_ArenaShooter",
+        "studioPhase": "loop-polish-pass-2-complete"
+      }
+    }
+  },
+  "extractedPattern": [
+    "One primary input (PagerTron: spacebar; Wizlympics: collect/avoid; Toggl: Okay/Nope)",
+    "Product metaphor obvious quickly (pager duty, real vs fake cloud, $1B valuation)",
+    "Score tied to business metaphor (high score DB, 10 pts / 500 swag, valuation $)",
+    "Embeddable browser experience — no download mentioned on benchmark pages",
+    "Replay + share (leaderboard, try again, share score)"
+  ]
+}
