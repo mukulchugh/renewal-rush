@@ -92,6 +92,13 @@
     .upgrade-btn:hover { border-color: var(--accent); transform: translateY(-1px); }
     .upgrade-btn strong { display: block; font-size: 0.82rem; margin-bottom: 3px; }
     .upgrade-btn span { font-size: 0.7rem; color: var(--muted); }
+    .meter-wrap { align-self: center; width: min(360px, 92%); }
+    .meter-wrap .challenge-label { margin-bottom: 5px; }
+    .pill.urgent { border-color: var(--red); animation: pulse-pill 0.5s ease infinite; }
+    .pill.urgent strong { color: var(--red); }
+    #health-fill { background: linear-gradient(90deg, var(--green), #fbbf24, var(--red)); transition: width 0.35s; }
+    #threat-fill { background: linear-gradient(90deg, #6366f1, var(--red)); transition: width 0.35s; }
+    .rank { font-size: 2rem; font-weight: 800; color: var(--gold); margin: 8px 0; letter-spacing: -0.03em; }
   </style>
 </head>
 <body>
@@ -105,7 +112,9 @@
       <div><img src="assets/brand/quivly-logo-forest-white.webp" alt="" /><div class="title-sm">FPS Runner</div></div>
       <div class="stats">
         <div class="pill gold">ARR <strong id="t-arr">$0</strong></div>
+        <div class="pill" id="pill-timer">Renewal <strong id="t-timer">90</strong>s</div>
         <div class="pill">Dist <strong id="t-dist">0</strong>m</div>
+        <div class="pill">Deploys <strong id="t-deploys">0</strong></div>
         <div class="pill" id="pill-zone">Zone <strong id="t-zone">Connect</strong></div>
         <div class="pill">Speed <strong id="t-spd">1.0</strong>×</div>
         <div class="pill hot" id="pill-mult">Mult <strong id="t-mult">1.0</strong>×</div>
@@ -120,24 +129,32 @@
       <div class="challenge-label"><span id="challenge-text">Challenge loading…</span><strong id="challenge-progress">0/0</strong></div>
       <div class="challenge-bar"><div class="challenge-fill" id="challenge-fill"></div></div>
     </div>
-    <div class="banner" id="banner">Auto-run — strafe lanes · jump hurdles · slide beams · laser churn</div>
+    <div class="meter-wrap">
+      <div class="challenge-label"><span>Portfolio health</span><strong id="t-health">100%</strong></div>
+      <div class="challenge-bar"><div class="challenge-fill" id="health-fill" style="width:100%"></div></div>
+    </div>
+    <div class="meter-wrap">
+      <div class="challenge-label"><span>Churn threat</span><strong id="t-threat">Low</strong></div>
+      <div class="challenge-bar"><div class="challenge-fill" id="threat-fill" style="width:0%"></div></div>
+    </div>
+    <div class="banner" id="banner">90s renewal — deploy on at-risk signals · dodge healthy · stack ARR</div>
   </div>
   <div class="hurdle-hint" id="hurdle-hint"></div>
-  <p class="hint" id="hint">A/D lanes · Mouse aim · Click laser · Space jump · S slide</p>
+  <p class="hint" id="hint">A/D lanes · Click laser · E Agent Pulse · Shift dash · Space/S jump/slide</p>
   <a class="back" href="index.html">← Game Lab</a>
 
   <div class="overlay" id="title">
     <div class="modal">
       <img src="assets/brand/quivly-logo-forest-white.webp" alt="" />
       <h2>FPS Runner</h2>
-      <p>Advanced FPS runner — zones ramp up difficulty, elite churn swarms, power-ups, lane dash, score multipliers, and roguelite upgrades every challenge.</p>
+      <p>90-second renewal sprint. Surface signals from CRM, Gong, Stripe &amp; more — laser deploy at-risk churn, ignore healthy accounts, manage portfolio health before renewal day.</p>
       <div class="controls">
-        <div><span>A / D</span> strafe lane</div>
-        <div><span>Mouse</span> aim</div>
-        <div><span>Click</span> fire laser</div>
-        <div><span>Space / S</span> jump / slide</div>
-        <div><span>Shift</span> lane dash</div>
-        <div><span>Challenges</span> pick upgrades</div>
+        <div><span>Click</span> laser deploy</div>
+        <div><span>E</span> Agent Pulse (AoE)</div>
+        <div><span>A / D</span> strafe · <span>Shift</span> dash</div>
+        <div><span>Space / S</span> jump / slide hurdles</div>
+        <div><span>Goal</span> high ARR + health at 0:00</div>
+        <div><span>Threat</span> rises if signals escape</div>
       </div>
       <button class="btn" id="start">Lock aim &amp; run</button>
     </div>
@@ -152,6 +169,7 @@
   <div class="overlay hidden" id="end">
     <div class="modal">
       <h2 id="end-title">Run over</h2>
+      <p class="rank" id="end-rank"></p>
       <p id="end-stats" style="font-family:monospace;font-size:0.82rem"></p>
       <p id="end-best" style="color:var(--gold);font-size:0.75rem;margin:8px 0 16px"></p>
       <button class="btn" id="replay">Run again →</button>
@@ -187,7 +205,18 @@
       { id: "coins10", label: "Collect 10 ARR chips", goal: 10, track: "coins", reward: 2200 },
       { id: "dist250", label: "Sprint 250m", goal: 250, track: "dist", reward: 2800 },
       { id: "combo6", label: "Hit 6× kill streak", goal: 6, track: "maxCombo", reward: 2000 },
+      { id: "deploy8", label: "Deploy 8 signals", goal: 8, track: "deploys", reward: 2400 },
+      { id: "health70", label: "End above 70% health", goal: 70, track: "healthEnd", reward: 3000 },
+      { id: "near5", label: "5 near-miss dodges", goal: 5, track: "nearMisses", reward: 1600 },
     ];
+    const RENEWAL_MS = 90000;
+    const SIGNALS = ["CRM", "Gong", "Stripe", "Zendesk", "Slack", "Market"];
+    const COMBO_TIERS = [
+      { at: 3, name: "Deploy Streak" },
+      { at: 6, name: "Save Mode" },
+      { at: 10, name: "Renewal Hero" },
+    ];
+    const THREAT_LABELS = ["Low", "Rising", "High", "Critical"];
     const HURDLE_GAUNTLETS = [
       [{ type: "hurdle", lane: 0 }, { type: "low", lane: 1 }, { type: "churn", lane: 2 }],
       [{ type: "gap", lane: 1 }, { type: "hurdle", lane: 1 }, { type: "coin", lane: 0 }],
@@ -207,6 +236,8 @@
       { id: "overdrive", label: "Overdrive", desc: "8s double ARR & wide laser", apply: (s) => { s.power.overcharge = 8; } },
       { id: "magnet", label: "ARR Magnet", desc: "7s pull all chips", apply: (s) => { s.power.magnet = 7; } },
       { id: "mult", label: "Score Amp", desc: "+0.5× multiplier", apply: (s) => { s.multiplier = Math.min(5, s.multiplier + 0.5); } },
+      { id: "pulse", label: "Pulse Reactor", desc: "−20% Agent Pulse cooldown", apply: (s) => { s.up.fireRate += 0.08; s.pulseCd = 0; } },
+      { id: "triage", label: "Triage Boost", desc: "+8 portfolio health", apply: (s) => { modHealth(8); } },
     ];
     const POWER_LABELS = { overcharge: "Overdrive", magnet: "Magnet", slowmo: "Focus" };
 
@@ -247,7 +278,164 @@
     function sfxDash() { tone(300, 0.07, "sawtooth", 0.05, 120); }
     function sfxNear() { tone(640, 0.06, "sine", 0.04); }
 
-    function aimDot() { return 0.94 - (state.up?.aim || 0) - (state.power.overcharge > 0 ? 0.04 : 0); }
+    function aimDot(threshold = 0.94) {
+      return threshold - (state.up?.aim || 0) - (state.power.overcharge > 0 ? 0.04 : 0);
+    }
+
+    function isThreat(ent) {
+      return ["churn", "elite", "shielded", "splitter", "mini"].includes(ent.type);
+    }
+
+    function modHealth(delta) {
+      state.health = THREE.MathUtils.clamp(state.health + delta, 0, 100);
+      $("health-fill").style.width = state.health + "%";
+      $("t-health").textContent = Math.round(state.health) + "%";
+      $("vignette").classList.toggle("danger", state.health < 35 && state.running);
+      if (state.health <= 0 && state.running) endRun(false, "Portfolio health collapsed.");
+      updateHud();
+    }
+
+    function modThreat(delta) {
+      state.threat = THREE.MathUtils.clamp(state.threat + delta, 0, 100);
+      $("threat-fill").style.width = state.threat + "%";
+      const idx = state.threat >= 75 ? 3 : state.threat >= 50 ? 2 : state.threat >= 25 ? 1 : 0;
+      $("t-threat").textContent = THREAT_LABELS[idx];
+    }
+
+    function comboTierName(n) {
+      let name = "";
+      COMBO_TIERS.forEach((t) => { if (n >= t.at) name = t.name; });
+      return name;
+    }
+
+    function calcRank() {
+      const score = state.arr * 0.4 + state.health * 120 + state.deploys * 80 + state.challengesCompleted * 200 + state.maxCombo * 50;
+      if (score >= 12000 && state.health >= 60) return { rank: "S", label: "Renewal Hero" };
+      if (score >= 8000 && state.health >= 45) return { rank: "A", label: "Quarter Saved" };
+      if (score >= 5000) return { rank: "B", label: "Solid Save" };
+      if (score >= 2500) return { rank: "C", label: "Needs Follow-up" };
+      return { rank: "D", label: "At Risk" };
+    }
+
+    function spawnMinis(pos, lane) {
+      [-1, 1].forEach((off) => {
+        const l = THREE.MathUtils.clamp(lane + off, 0, 2);
+        const e = makeEntity("mini", l, pos.z + off * 0.4);
+        e.mesh.position.x = LANES[l];
+      });
+    }
+
+    function finishKill(ent) {
+      ent.dead = true;
+      const pos = new THREE.Vector3();
+      ent.mesh.getWorldPosition(pos);
+      if (ent.type === "splitter") spawnMinis(pos, ent.lane);
+      state.combo++;
+      state.maxCombo = Math.max(state.maxCombo, state.combo);
+      state.deploys++;
+      state.signalsSaved++;
+      const bases = { churn: 400, elite: 700, shielded: 550, splitter: 480, mini: 220 };
+      const chips = ent.signalChips || 1;
+      const stackBonus = 1 + (chips - 1) * 0.35;
+      const base = (bases[ent.type] || 400) * stackBonus;
+      const gain = Math.round(base * state.speed * state.multiplier * (1 + state.combo * 0.15) * (state.power.overcharge > 0 ? 2 : 1));
+      state.arr += gain;
+      modHealth(5);
+      modThreat(-5);
+      bumpChallenge("punches");
+      bumpChallenge("deploys");
+      if (state.combo >= 3) bumpMultiplier(0.05);
+      if (state.challenge?.track === "maxCombo" && state.maxCombo >= state.challenge.goal) completeChallenge();
+      const tier = comboTierName(state.combo);
+      showCombo(state.combo);
+      const src = ent.signal || "Stack";
+      showCallout(state.combo >= 5 ? tier || "KILL STREAK!" : `Deployed · ${src}`);
+      showFloater(`+${fmt(gain)} · ${src}`);
+      spawnBurst(pos, COLORS.churn);
+      sfxHit();
+      shakeHud();
+      scene.remove(ent.mesh);
+    }
+
+    function damageEnemy(ent) {
+      if (!isThreat(ent) || ent.dead) return false;
+      if (ent.hp > 1) {
+        ent.hp--;
+        shakeHud();
+        showFloater(ent.type === "shielded" ? "SHIELD CRACK" : "ARMOR HIT", "bad");
+        sfxHit();
+        return true;
+      }
+      finishKill(ent);
+      return true;
+    }
+
+    function onSignalEscaped(ent) {
+      if (ent.escaped) return;
+      ent.escaped = true;
+      ent.dead = true;
+      scene.remove(ent.mesh);
+      modHealth(ent.type === "elite" ? -14 : ent.type === "shielded" ? -12 : -9);
+      modThreat(10);
+      state.combo = 0;
+      showFloater(`${ent.signal || "Signal"} escaped!`, "bad");
+      showCallout("MISSED SIGNAL!");
+    }
+
+    function deployPulse() {
+      if (state.pulseCd > 0 || state.paused || !state.running) return;
+      state.pulseCd = Math.max(2.8, 5.2 * (1 - state.up.fireRate * 0.25));
+      sfxChallenge();
+      flashMuzzle();
+      camera.getWorldPosition(aimOrigin);
+      camera.getWorldDirection(aimDir);
+      const muzzlePos = new THREE.Vector3();
+      gun.userData.muzzle.getWorldPosition(muzzlePos);
+      let hits = 0;
+      entities.forEach((ent) => {
+        if (!isThreat(ent) || ent.dead) return;
+        const wp = new THREE.Vector3();
+        ent.mesh.getWorldPosition(wp);
+        if (wp.z > 2 || wp.z < -30) return;
+        const to = wp.clone().sub(aimOrigin);
+        if (to.length() > 22) return;
+        if (to.normalize().dot(aimDir) < aimDot(0.82)) return;
+        damageEnemy(ent);
+        hits++;
+        spawnLaserBeam(muzzlePos, wp);
+      });
+      if (hits === 0) spawnLaserBeam(muzzlePos, aimOrigin.clone().add(aimDir.clone().multiplyScalar(20)));
+      showCallout(hits > 2 ? "WIDE PULSE!" : "AGENT PULSE!");
+      bumpMultiplier(0.06);
+      updateHud();
+    }
+
+    function endRun(won, reason) {
+      state.gameOver = true;
+      state.running = false;
+      state.won = won;
+      document.exitPointerLock?.();
+      if (!won) sfxCrash(); else sfxChallenge();
+      const best = Number(localStorage.getItem(BEST_KEY) || 0);
+      const newBest = state.arr > best;
+      if (newBest) localStorage.setItem(BEST_KEY, String(state.arr));
+      const { rank, label } = calcRank();
+      $("end-title").textContent = won ? "Renewal saved!" : reason || "Run over";
+      $("end-rank").textContent = `${rank} · ${label}`;
+      const secs = Math.round((RENEWAL_MS - state.timerMs) / 1000);
+      $("end-stats").textContent = [
+        `${fmt(state.arr)} ARR`,
+        `${state.deploys} deploys`,
+        `${Math.round(state.health)}% health`,
+        `${state.challengesCompleted} challenges`,
+        `${state.maxCombo}× streak`,
+        `${state.multiplier.toFixed(1)}× mult`,
+        `${secs}s run`,
+      ].join(" · ");
+      $("end-best").textContent = newBest ? "New best ARR!" : best > 0 ? `Best ARR: ${fmt(best)}` : "";
+      $("end").classList.remove("hidden");
+      $("hud").style.visibility = "hidden";
+    }
 
     function showFloater(text, cls = "") {
       const el = document.createElement("div");
@@ -368,6 +556,9 @@
       const v = state.stats[c.track] ?? 0;
       if (c.track === "dist") return Math.min(c.goal, state.dist);
       if (c.track === "maxCombo") return Math.min(c.goal, state.maxCombo);
+      if (c.track === "deploys") return Math.min(c.goal, state.deploys || 0);
+      if (c.track === "nearMisses") return Math.min(c.goal, state.nearMisses || 0);
+      if (c.track === "healthEnd") return state.health >= c.goal ? c.goal : 0;
       return Math.min(c.goal, v);
     }
 
@@ -418,7 +609,8 @@
     }
     function showCombo(n) {
       const el = $("combo-display");
-      el.textContent = n > 1 ? `${n}× KILL STREAK` : "";
+      const tier = comboTierName(n);
+      el.textContent = n > 1 ? (tier ? `${n}× ${tier}` : `${n}× KILL STREAK`) : "";
       el.classList.toggle("on", n > 1);
     }
 
@@ -446,7 +638,7 @@
         best = dist;
         target = ent;
       }
-      if (target?.type === "churn" || target?.type === "elite") { ch.classList.add("target"); ch.classList.remove("bad"); }
+      if (isThreat(target)) { ch.classList.add("target"); ch.classList.remove("bad"); }
       else if (target?.type === "healthy") { ch.classList.add("bad"); ch.classList.remove("target"); }
       else { ch.classList.remove("target", "bad"); }
     }
@@ -625,7 +817,8 @@
         multiplier: 1, shield: 0, paused: false,
         up: { fireRate: 0, aim: 0 },
         power: { overcharge: 0, magnet: 0, slowmo: 0 },
-        dashCd: 0, invuln: 0, nearMisses: 0,
+        dashCd: 0, invuln: 0, nearMisses: 0, pulseCd: 0,
+        health: 100, threat: 0, timerMs: RENEWAL_MS, deploys: 0, signalsSaved: 0, won: false,
       };
       entities.forEach((e) => scene.remove(e.mesh)); entities = [];
       laserBolts.forEach((b) => { scene.remove(b.beam); scene.remove(b.glow); });
@@ -692,7 +885,7 @@
       gun.userData.muzzle.getWorldPosition(muzzlePos);
       let best = null, bestDist = Infinity, hitPos = null;
       for (const ent of entities) {
-        if (ent.dead || !["churn", "elite", "coin"].includes(ent.type)) continue;
+        if (ent.dead || (!isThreat(ent) && ent.type !== "coin")) continue;
         const wp = new THREE.Vector3();
         ent.mesh.getWorldPosition(wp);
         if (wp.z > 1.5 || wp.z < -35) continue;
@@ -705,30 +898,8 @@
       const beamEnd = hitPos || aimOrigin.clone().add(aimDir.clone().multiplyScalar(24));
       spawnLaserBeam(muzzlePos, beamEnd);
       if (!best) { state.combo = 0; updateHud(); return; }
-      if (best.type === "churn" || best.type === "elite") {
-        if (best.type === "elite" && best.hp > 1) {
-          best.hp--;
-          shakeHud();
-          showFloater("SHIELD HIT", "bad");
-          sfxHit();
-          updateHud();
-          return;
-        }
-        best.dead = true;
-        state.combo++;
-        state.maxCombo = Math.max(state.maxCombo, state.combo);
-        const base = best.type === "elite" ? 700 : 400;
-        const gain = Math.round(base * state.speed * state.multiplier * (1 + state.combo * 0.15) * (state.power.overcharge > 0 ? 2 : 1));
-        state.arr += gain;
-        bumpChallenge("punches");
-        if (state.combo >= 3) bumpMultiplier(0.05);
-        if (state.challenge?.track === "maxCombo" && state.maxCombo >= state.challenge.goal) completeChallenge();
-        showCombo(state.combo);
-        showCallout(state.combo >= 5 ? "KILL STREAK!" : best.type === "elite" ? "ELITE DOWN!" : "LASER HIT!");
-        showFloater("+" + fmt(gain));
-        spawnBurst(best.mesh.position, COLORS.churn);
-        sfxHit();
-        shakeHud();
+      if (isThreat(best)) {
+        if (!damageEnemy(best)) state.combo = 0;
       } else if (best.type === "coin") collectCoin(best);
       updateHud();
     }
@@ -792,6 +963,26 @@
           type = "elite";
           break;
         }
+        case "shielded": {
+          const grp = new THREE.Group();
+          const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.62, 0), mat(COLORS.churn, 0.9));
+          const shield = new THREE.Mesh(new THREE.SphereGeometry(0.82, 12, 12), mat(0x818cf8, 0.5));
+          shield.material.transparent = true;
+          shield.material.opacity = 0.45;
+          grp.add(core, shield);
+          grp.position.set(LANES[lane], 1.12, z);
+          mesh = grp;
+          type = "shielded";
+          break;
+        }
+        case "splitter":
+          mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.65, 0), mat(0xff4d6d, 1));
+          mesh.position.set(LANES[lane], 1.12, z);
+          break;
+        case "mini":
+          mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.32, 0), mat(COLORS.churn, 1));
+          mesh.position.set(LANES[lane], 0.95, z);
+          break;
         case "pickup_shield":
           mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), mat(0x818cf8, 1));
           mesh.position.set(LANES[lane], 1.0, z);
@@ -868,9 +1059,14 @@
         mover: type === "mover",
         moverPhase: Math.random() * Math.PI * 2,
         cleared: false,
-        hp: type === "elite" ? 2 : 1,
-        nearMissed: false,
+        hp: type === "elite" ? 2 : type === "shielded" ? 3 : 1,
+        nearMissed: false, escaped: false,
+        signal: null, signalChips: 1,
       };
+      if (isThreat(ent)) {
+        ent.signal = SIGNALS[Math.floor(Math.random() * SIGNALS.length)];
+        ent.signalChips = Math.random() < 0.32 ? 2 : 1;
+      }
       entities.push(ent);
       return ent;
     }
@@ -914,8 +1110,15 @@
       const z = state.spawnZ;
       let type;
       const eliteChance = state.zoneName === "Deploy" ? 0.12 : state.zoneName === "Renewal Rush" ? 0.2 : 0.05;
+      const tb = state.threat / 100;
       if (roll < 0.04 && state.dist > 60) type = ["pickup_shield", "pickup_overcharge", "pickup_magnet"][Math.floor(Math.random() * 3)];
-      else if (roll < 0.24) type = Math.random() < eliteChance ? "elite" : "churn";
+      else if (roll < 0.24) {
+        const r = Math.random();
+        if (r < 0.07 + tb * 0.08) type = "shielded";
+        else if (r < 0.12 + tb * 0.06) type = "splitter";
+        else if (r < 0.18) type = "mini";
+        else type = Math.random() < eliteChance ? "elite" : "churn";
+      }
       else if (roll < 0.34) type = "healthy";
       else if (roll < 0.44) type = "hurdle";
       else if (roll < 0.54) type = "beam";
@@ -967,14 +1170,17 @@
 
         if (ent.dead || ent.lane !== playerLane) continue;
 
-        if (ent.type === "churn" || ent.type === "elite") continue;
+        if (isThreat(ent)) continue;
 
         if (ent.type === "healthy") {
           state.combo = 0;
           state.arr = Math.max(0, state.arr - 200);
+          modHealth(-12);
+          modThreat(6);
           ent.dead = true;
           scene.remove(ent.mesh);
           showCallout("Wrong tag!");
+          showFloater("Healthy account!", "bad");
           sfxCrash();
           updateHud();
           continue;
@@ -1013,6 +1219,7 @@
     function rewardPerfect() {
       bumpMultiplier(0.08);
       state.arr += Math.round(120 * state.multiplier);
+      modHealth(3);
       showFloater("PERFECT!", "accent");
     }
 
@@ -1027,18 +1234,7 @@
         updateHud();
         return;
       }
-      state.gameOver = true;
-      state.running = false;
-      document.exitPointerLock?.();
-      sfxCrash();
-      const best = Number(localStorage.getItem(BEST_KEY) || 0);
-      const newBest = state.arr > best;
-      if (newBest) localStorage.setItem(BEST_KEY, String(state.arr));
-      $("end-title").textContent = "Run crashed.";
-      $("end-stats").textContent = `${fmt(state.arr)} · ${Math.round(state.dist)}m · ${state.zoneName} · ${state.challengesCompleted} challenges · ${state.maxCombo}× streak · ${state.multiplier.toFixed(1)}× mult`;
-      $("end-best").textContent = newBest ? "New best run!" : best > 0 ? `Best: ${fmt(best)}` : "";
-      $("end").classList.remove("hidden");
-      $("hud").style.visibility = "hidden";
+      endRun(false, "Run crashed into obstacles.");
     }
 
     function updateHud() {
@@ -1049,7 +1245,14 @@
       $("t-challenges").textContent = state.challengesCompleted;
       $("t-mult").textContent = state.multiplier.toFixed(1);
       $("t-shield").textContent = state.shield;
+      $("t-deploys").textContent = state.deploys;
+      $("t-timer").textContent = Math.max(0, Math.ceil(state.timerMs / 1000));
       $("pill-shield").classList.toggle("shield-on", state.shield > 0);
+      $("pill-timer").classList.toggle("urgent", state.timerMs < 15000);
+      if (state.health !== undefined) {
+        $("health-fill").style.width = state.health + "%";
+        $("t-health").textContent = Math.round(state.health) + "%";
+      }
       updatePowerHud();
       updateChallengeHud();
       if (state.challenge?.track === "dist" && state.dist >= state.challenge.goal) completeChallenge();
@@ -1078,8 +1281,16 @@
         tickPowerups(dt);
         if (state.dashCd > 0) state.dashCd -= dt;
         if (state.invuln > 0) state.invuln -= dt;
+        if (state.pulseCd > 0) state.pulseCd -= dt;
 
-        state.speed = Math.min(3.8, (1 + state.dist * 0.004) * state.zoneSpeed);
+        state.timerMs -= dt * 1000;
+        if (state.timerMs <= 0) {
+          if (state.challenge?.track === "healthEnd" && state.health >= state.challenge.goal) completeChallenge();
+          endRun(state.health >= 40, state.health >= 40 ? "Renewal day complete!" : "Renewal failed — health too low.");
+          return;
+        }
+
+        state.speed = Math.min(3.8, (1 + state.dist * 0.004) * state.zoneSpeed * (1 + state.threat * 0.002));
         const rush = state.speed >= 2.5;
         $("vignette").className = "vignette" + (rush ? " rush" : state.combo >= 4 ? " danger" : "");
         camera.fov = THREE.MathUtils.lerp(camera.fov, FOV + (rush ? 8 : 0), dt * 3);
@@ -1114,13 +1325,14 @@
           if (ent.dead) return;
           ent.mesh.position.z += scroll;
           if (ent.type === "coin") ent.mesh.rotation.y += dt * 5;
-          if (ent.type === "churn" || ent.type === "elite") {
-            ent.mesh.rotation.x += dt * 2;
-            const bob = ent.type === "elite" ? 1.15 : 1.1;
+          if (isThreat(ent)) {
+            ent.mesh.rotation.x += dt * (ent.type === "mini" ? 4 : 2);
+            const bob = ent.type === "elite" ? 1.15 : ent.type === "mini" ? 0.95 : 1.1;
             ent.mesh.position.y = bob + Math.sin(clock.elapsedTime * 6) * 0.08;
             if (!ent.nearMissed && ent.lane === playerLane && ent.mesh.position.z > 0.8 && ent.mesh.position.z < 2.2) {
               ent.nearMissed = true;
               state.nearMisses++;
+              bumpChallenge("nearMisses");
               const bonus = Math.round(180 * state.multiplier);
               state.arr += bonus;
               bumpMultiplier(0.06);
@@ -1139,9 +1351,8 @@
             ent.mesh.position.x = THREE.MathUtils.lerp(ent.mesh.position.x, LANES[laneIdx], dt * 6);
           }
           if (ent.mesh.position.z > 8) {
-            ent.dead = true;
-            scene.remove(ent.mesh);
-            if (ent.type === "churn" || ent.type === "elite") state.combo = 0;
+            if (isThreat(ent) && !ent.dead) onSignalEscaped(ent);
+            else if (!ent.dead) { ent.dead = true; scene.remove(ent.mesh); }
           }
         });
         entities = entities.filter((e) => !e.dead);
@@ -1255,6 +1466,7 @@
     window.addEventListener("keydown", (e) => {
       keys[e.code] = true;
       if (e.code === "KeyJ" && state.running) shoot();
+      if (e.code === "KeyE" && state.running) deployPulse();
     });
     window.addEventListener("keyup", (e) => { keys[e.code] = false; });
     $("canvas").addEventListener("click", () => {

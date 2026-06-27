@@ -11,7 +11,7 @@
     "phase": "web-polish",
     "currentLesson": "lesson-03-signal-triage",
     "agentStatus": "ready",
-    "agentMessage": "Advanced FPS Runner — zones, elite swarms, upgrades, power-ups, dash, multipliers, rush mode. renewal-rush-runner.html",
+    "agentMessage": "Detailed FPS Runner — 90s renewal loop, portfolio health, threat meter, signal-tagged churn (CRM/Gong/Stripe), Agent Pulse AoE, shielded/splitter enemies, S-D rank. renewal-rush-runner.html",
     "mcpConnected": false,
     "mcpUrl": "http://127.0.0.1:8000/mcp",
     "unrealRunning": false

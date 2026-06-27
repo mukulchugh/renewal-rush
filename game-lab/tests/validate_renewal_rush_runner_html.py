@@ -32,6 +32,11 @@ REQUIRED = [
     "ZONE_VIBES",
     "CHUNK_PALETTE",
     "toneMappingExposure",
+    "RENEWAL_MS",
+    "deployPulse",
+    "finishKill",
+    "SIGNALS",
+    "calcRank",
 ]
 
 
