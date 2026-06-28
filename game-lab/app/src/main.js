@@ -16,6 +16,7 @@ import { createEnemies } from "./enemies.js";
 import { createCombat } from "./combat.js";
 import { createController } from "./controller.js";
 import { createAmbient } from "./ambient.js";
+import { createSky } from "./sky.js";
 import { createMeta } from "./meta.js";
 
 const canvas = document.getElementById("game");
@@ -103,9 +104,21 @@ try {
     import("@babylonjs/loaders/glTF"), // registers the glTF/GLB loader
   ]);
   ctx.humanAsset = await LoadAssetContainerAsync("/models/xbot.glb", scene); // Mixamo X Bot (idle/run rig)
+  ctx.gunAsset = await LoadAssetContainerAsync("/models/gun.glb", scene).catch(() => null); // Quaternius rifle (CC0)
 } catch (e) {
   console.error("human model load failed — using primitive avatars", e);
   ctx.humanAsset = null;
+  ctx.gunAsset = null;
+}
+
+// Authored traffic cars (Kenney Car Kit, CC0). Visual only; [] → ambient.js
+// falls back to its procedural box cars.
+try {
+  const { loadCarAssets } = await import("./assets.js");
+  ctx.carAssets = await loadCarAssets(scene);
+} catch (e) {
+  console.error("car models load failed — using procedural traffic", e);
+  ctx.carAssets = [];
 }
 
 // Init order (ARCHITECTURE.md): fx -> world -> audio -> hud -> brand -> enemies -> combat -> controller.
@@ -119,6 +132,7 @@ const step = (name, fn) => {
 };
 step("fx", () => createFx(ctx));
 ctx.world = step("world", () => createWorld(ctx)); // expose worldBounds/sectorAt to enemies
+step("sky", () => createSky(ctx)); // photoreal sky HDRI; retires the procedural dome/sun/moon/stars
 step("audio", () => createAudio(ctx));
 step("hud", () => createHud(ctx));
 ctx.brand = step("brand", () => createBrand(ctx));
