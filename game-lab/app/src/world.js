@@ -1336,6 +1336,12 @@ export function createWorld(ctx) {
     }
   }
 
+  // NOTE: freezeShadowCastersBoundingInfo is deliberately NOT set. It would freeze the global
+  // caster-bounds recompute (a CPU win), but the Renewal Gate is a shadow caster that scale-pulses
+  // up to 1.16× with player proximity (gateRoot.scaling, see tick) — a dynamic caster whose shadow
+  // could clip at the frozen box. The win is CPU-side and this scene is GPU-bound, so it's not worth
+  // the risk on the hero landmark. Revisit only if profiling shows caster-bounds recompute is hot.
+
   // C2 — Static physics colliders (only when Havok is on). The player PCC collides/slides
   // against these. Only solid, walkable-against geometry: ground, building bodies, arena
   // walls. Cosmetic slabs/caps/signs are skipped (player never collides with them).

@@ -66,7 +66,7 @@ const SHARPEN_EDGE = 0.3;
 // SSAO: subtle grounding only — must not muddy the bright look.
 const SSAO_RADIUS = 0.9;
 const SSAO_STRENGTH = 0.5;
-const SSAO_SAMPLES = 16;
+const SSAO_SAMPLES = 8; // 120fps budget: half the AO taps (was 16); subtle AO hides the drop
 
 // Tone-map: bright, punchy, SATURATED — the "Total Overdose" sun-drenched look.
 // Saturation comes from ColorCurves (GlobalSaturation up); a touch more exposure +
@@ -94,8 +94,17 @@ const QUALITY_TIERS = [
   { scale: 1.25, ssao: true, ssr: false },  // 1 — coarser, drop SSR (the priciest pass)
   { scale: 1.5, ssao: false, ssr: false },  // 2 — coarse + AO off (last resort)
 ];
-const QUALITY_DOWN_FPS = 50; // sustained below → step down a tier
-const QUALITY_UP_FPS = 58;   // sustained above → step back up a tier
+// Refresh-RELATIVE thresholds (not a hard FPS number). A hard "<50fps" target is a bug on
+// high-refresh panels and a perpetual-downscale trap on capped ones: vsync caps getFps() at the
+// panel's Hz, so "target 120" on a 60Hz screen reads 60 forever and downscales to the floor for
+// nothing. Instead we learn the achievable ceiling (running max fps AT TIER 0 — measured at full
+// quality so downscaling can't chase its own tail) and target a fraction of it. Result: ~120 on a
+// 120Hz panel, a clean ~60 on a 60Hz panel, and "as smooth as this machine allows" on a weak GPU.
+const QUALITY_DOWN_FRAC = 0.82; // fps below ceiling×this (sustained) → step down a tier
+const QUALITY_UP_FRAC = 0.94;   // fps above ceiling×this (sustained) → step back up a tier
+const QUALITY_CEIL_MIN = 55;    // clamp the learned ceiling (avoid a bad early sample)
+const QUALITY_CEIL_MAX = 250;   // …and a spurious high spike (covers 60/120/144/240 panels)
+const QUALITY_WARMUP_SEC = 2.5; // don't act until fps stabilizes + the ceiling is learned
 const QUALITY_EVAL_SEC = 1.5; // how long a condition must hold before acting (anti-flap)
 
 const FLASH_DECAY = 9.0; // flash opacity e-fold/sec (~0.2s fade)
@@ -181,16 +190,18 @@ export function createFx(ctx) {
   }
 
   // ── SSAO2 (WebGL2 only) ────────────────────────────────────────────────────
-  // Full-res ratio (1.0) keeps contact shadows sharp; strength stays subtle so
-  // the bright look isn't muddied.
+  // Half-res AO buffer (ratio 0.5 → ~4× cheaper) + cheap box blur. The AO is subtle
+  // (totalStrength stays low) so the quality drop doesn't read; maxZ stops it computing
+  // out to the skyline. This is a 120fps-budget pass, not a hero contact-shadow pass.
   let ssao = null;
   try {
     if (SSAO2RenderingPipeline.IsSupported) {
-      ssao = new SSAO2RenderingPipeline("rr-ssao", scene, 1.0, [camera]);
+      ssao = new SSAO2RenderingPipeline("rr-ssao", scene, 0.5, [camera]); // 1.0 → 0.5 (half-res)
       ssao.radius = SSAO_RADIUS;
       ssao.totalStrength = SSAO_STRENGTH;
       ssao.samples = SSAO_SAMPLES;
-      ssao.expensiveBlur = true;
+      ssao.expensiveBlur = false; // bilateral → box blur (AO is subtle; denoise cost not worth it)
+      ssao.maxZ = 120;            // don't compute AO out to the skyline
     }
   } catch {
     ssao = null; // never let AO block the render path
@@ -208,12 +219,17 @@ export function createFx(ctx) {
     ssr.reflectivityThreshold = 0.04; // ignore near-matte pixels
     ssr.roughnessFactor = 0.2;      // jitter rays by surface roughness (soft, real)
     ssr.blurDispersionStrength = 0.03;
+    ssr.ssrDownsample = 1;          // trace reflections at HALF res — the key SSR GPU win (¼ the rays)
     ssr.blurDownsample = 1;         // half-res blur (perf; reflections are soft anyway)
-    ssr.maxDistance = 350;          // city-scale rays
-    ssr.maxSteps = 1500;
-    ssr.step = 4;                   // 2D march stride (perf vs accuracy)
-    ssr.thickness = 0.6;
-    ssr.enableSmoothReflections = true;
+    // 120fps budget (8.3ms): SSR is a per-pixel ray-march, cost ∝ maxSteps×pixels. 1500 steps was
+    // the single priciest thing in the frame. A street-level wet look needs only ~64 steps with a
+    // larger stride; reflections fall off sooner (maxDistance 120) but near-ground reads the same.
+    ssr.maxDistance = 120;          // rays die sooner (street-level wet look, not skyline mirror)
+    ssr.maxSteps = 64;              // 1500 → 64 (≈90% less march work)
+    ssr.step = 8;                   // larger stride compensates for fewer steps
+    ssr.thickness = 0.5;
+    ssr.enableSmoothReflections = true; // KEEP: large step is exactly its use case (hides stride gaps)
+    ssr.enableAutomaticThicknessComputation = false; // would force a 2nd scene render — never at 120fps
     ssr.selfCollisionNumSkip = 2;   // avoid surface self-reflection artifacts
   } catch {
     ssr = null; // never let SSR block the render path
@@ -225,6 +241,8 @@ export function createFx(ctx) {
   const baseHwScale = (() => { try { return engine.getHardwareScalingLevel() || 1; } catch { return 1; } })();
   let qualityTier = 0;
   let qualityHoldSec = 0; // how long the current step condition has held
+  let refreshHz = 60;     // learned achievable ceiling (running max fps at tier 0); see constants
+  let qualityElapsed = 0; // total un-paused time → gates the warmup before we act
   let ssaoAttached = !!ssao; // SSAO is created attached to [camera]
   const applyQualityTier = () => {
     const t = QUALITY_TIERS[qualityTier];
@@ -368,8 +386,15 @@ export function createFx(ctx) {
     // (anti-flap). engine.getFps() is Babylon's smoothed FPS. Frozen while paused.
     if (!(state && state.paused)) {
       const fps = engine.getFps();
-      const wantDown = fps < QUALITY_DOWN_FPS && qualityTier < QUALITY_TIERS.length - 1;
-      const wantUp = fps > QUALITY_UP_FPS && qualityTier > 0;
+      qualityElapsed += dt;
+      // Learn the ceiling only at tier 0 (full quality): a higher fps after a downscale would
+      // otherwise raise the target and trigger another downscale — a runaway. getFps() is already
+      // ~1s-smoothed, so it won't spike; clamp guards a bad sample either way.
+      if (qualityTier === 0 && fps > refreshHz) refreshHz = Math.min(QUALITY_CEIL_MAX, fps);
+      refreshHz = Math.max(QUALITY_CEIL_MIN, refreshHz);
+      const warm = qualityElapsed >= QUALITY_WARMUP_SEC;
+      const wantDown = warm && fps < refreshHz * QUALITY_DOWN_FRAC && qualityTier < QUALITY_TIERS.length - 1;
+      const wantUp = warm && fps > refreshHz * QUALITY_UP_FRAC && qualityTier > 0;
       if (wantDown || wantUp) {
         qualityHoldSec += dt;
         if (qualityHoldSec >= QUALITY_EVAL_SEC) {
