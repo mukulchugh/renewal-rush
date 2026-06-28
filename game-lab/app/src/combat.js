@@ -551,7 +551,9 @@ export function createCombat(ctx) {
     const origin = fr.origin;
     const dir = fr.direction;
     const { right, up } = basis(dir);
-    const muzzle = muzzleWorld(origin, dir, right, up);
+    // TPS: start the beam from the avatar's gun hand (published by the controller); else the
+    // camera-relative viewmodel muzzle. Fixes the beam reading as "off to the right" in TPS.
+    const muzzle = state.playerMuzzle || muzzleWorld(origin, dir, right, up);
 
     const pick = scene.pickWithRay(fr, isTarget);
     const hitOk = pick && pick.hit && pick.pickedPoint && pick.distance <= RANGE;
@@ -576,7 +578,7 @@ export function createCombat(ctx) {
     const origin = fr.origin;
     const fwd = fr.direction;
     const { right, up } = basis(fwd);
-    const muzzle = muzzleWorld(origin, fwd, right, up);
+    const muzzle = state.playerMuzzle || muzzleWorld(origin, fwd, right, up);
 
     // fan real rays through the cone; dedupe by mesh so each target is hit once
     const found = new Map();

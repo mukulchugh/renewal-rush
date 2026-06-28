@@ -56,6 +56,7 @@ import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { Ray } from "@babylonjs/core/Culling/ray";
 import { PhysicsCharacterController, CharacterSupportedState } from "@babylonjs/core/Physics/v2/characterController"; // C3: used only when ctx.useHavok
+import { spawnHuman } from "./humanavatar.js";
 
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
@@ -354,9 +355,19 @@ export function createController(ctx) {
     const gun = MeshBuilder.CreateBox("rr_p_gun", { width: 0.07, height: 0.07, depth: 0.34 }, scene);
     gun.material = lite; gun.isPickable = false; gun.parent = armR; gun.position.set(0.04, -0.5, 0.16);
 
+    // ── Real human character model (overlaid on the procedural rig) ──────────────
+    // Auto-scaled to ~1.8u, oriented, gun-in-hand via the shared helper. The primitive
+    // meshes stay as the invisible pose skeleton the pose code drives. Falls back to the
+    // primitive look if the shared asset is absent.
+    let human = null;
+    if (ctx.humanAsset) {
+      human = spawnHuman(ctx.humanAsset, root, Vector3, { faceYaw: 0, gun, tint: Color3.FromHexString(CFG.avBright) });
+      for (const m of [torso, pelvis, core, head, visor, armL, armR, legL, legR]) m.setEnabled(false);
+    }
+
     root.position.set(spawnPos.x, spawnPos.y - EYE, spawnPos.z);
     root.rotation.y = spawnYaw;
-    avatar = { root, pivot, shL, shR, hipL, hipR, armL, armR, legL, legR };
+    avatar = { root, pivot, shL, shR, hipL, hipR, armL, armR, legL, legR, human, gun };
   }
   buildAvatar();
 
@@ -947,6 +958,13 @@ export function createController(ctx) {
     // place + face + walk-cycle + dive-pose the visible avatar, then publish its torso position.
     poseAvatar(dt, rdt);
     if (state && state.playerPos) state.playerPos.set(_pos.x, feetY + AV_CHEST, _pos.z);
+    // Publish the gun's world position (right hand) so combat starts the deploy beam from the
+    // hand, not the camera-relative viewmodel offset (which reads as "off to the right" in TPS).
+    if (state && avatar && avatar.gun) {
+      avatar.gun.computeWorldMatrix(true);
+      const gp = avatar.gun.getAbsolutePosition();
+      if (!state.playerMuzzle) state.playerMuzzle = gp.clone(); else state.playerMuzzle.copyFrom(gp);
+    }
 
     wasCrouch = crouchHeld; // edge-detect for next frame's slide trigger
   }
@@ -979,6 +997,8 @@ export function createController(ctx) {
     // limbs: walk swing blended toward a dive tuck (arms forward = superman, legs trailing back).
     const moveSp = Math.hypot(vel.x, vel.z);
     const grounded = _pos.y <= baseY + 1e-3;
+    // Human model: play its walk while moving on the ground, freeze (idle) otherwise.
+    if (avatar.human) avatar.human.setMoving(moveSp > 0.6 && grounded && !diving, moveSp);
     if (grounded && !diving) gaitPhase += moveSp * dt * 1.5;
     const speedF = Math.min(moveSp / CFG.sprintSpeed, 1);
     const swing = Math.sin(gaitPhase) * CFG.avWalkSwing * speedF;

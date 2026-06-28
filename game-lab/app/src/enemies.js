@@ -87,6 +87,7 @@ import { PhysicsShapeType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugi
 import { BUCKET_ARR, SIGNALS, mulberry32 } from "./game.js";
 import { SIGNAL_META, RISK_TIERS } from "./brand.js";
 import { createEnemyAI } from "./enemyai.js"; // Yuka steering: navmesh paths, arrive, separation, avoidance
+import { spawnHuman } from "./humanavatar.js"; // real human glTF body (alive); primitives = death ragdoll
 
 // ── tiny math (local; game.js stays pure / un-imported for these) ───────────────
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
@@ -787,6 +788,16 @@ export function createEnemies(ctx) {
     };
 
     ent._meta = { kind: "signal", chips: 1, onHit: (dmg) => handleHit(ent, dmg) };
+
+    // Real human body (the alive look). The primitive meshes below become the HIDDEN
+    // death-ragdoll rig — shown only when the agent dies (beginRagdoll) or churns (fade).
+    ent.bodyMeshes = [torso, head, armL, armR, legL, legR, core, neck, pelvis, padL, padR, handL, handR, footL, footR, helmet, visor];
+    if (crown) ent.bodyMeshes.push(crown);
+    ent.human = ctx.humanAsset
+      ? spawnHuman(ctx.humanAsset, root, Vector3, { faceYaw: 0, gun, tint: coreBase })
+      : null;
+    if (ent.human) for (const m of ent.bodyMeshes) m.setEnabled(false);
+
     rigs.push(ent);
     return ent;
   }
@@ -974,6 +985,13 @@ export function createEnemies(ctx) {
     for (const p of ent.pivots) p.node.rotation.set(0, 0, 0);
     ent.root.rotation.set(0, 0, 0);
     ent.root.position.y = 0;
+
+    // Human present → alive look: show the human, hide the primitive (death-ragdoll) rig.
+    if (ent.human) {
+      for (const m of ent.bodyMeshes) m.setEnabled(false);
+      ent.human.setEnabled(true);
+      ent.human.setMoving(false);
+    }
   }
 
   function release(ent) {
@@ -1079,6 +1097,7 @@ export function createEnemies(ctx) {
   // An account churns: the agent slipped past (aged out) or reached the Renewal Gate line.
   function churnAway(ent) {
     ent.ai?.remove(); ent.ai = null; // stop steering — agent is leaving the field
+    if (ent.human) { ent.human.setEnabled(false); for (const m of ent.bodyMeshes) m.setEnabled(true); }
     ent.hit.metadata = null;
     ent.telegraphT = 0;
     ent.aimLine.setEnabled(false);
@@ -1546,6 +1565,8 @@ export function createEnemies(ctx) {
     if (ragdolls.length >= MAX_RAGDOLLS) release(ragdolls[0]);
 
     ent.ai?.remove(); ent.ai = null; // hand the body to the ragdoll/Havok — Yuka lets go
+    // Death look: drop the human model, reveal the primitive parts for the ragdoll tumble.
+    if (ent.human) { ent.human.setEnabled(false); for (const m of ent.bodyMeshes) m.setEnabled(true); }
     ent.alive = false;
     ent.removeMode = "ragdoll";
     ent.removing = RAGDOLL_LIFE;
@@ -1775,6 +1796,7 @@ export function createEnemies(ctx) {
 
     // pose: walk gait OR telegraph wind-up (weapon raised), + core glow + hit-flash punch
     poseTick(ent, dt, telegraphing);
+    if (ent.human) { const ms = Math.hypot(ent.vx, ent.vz); ent.human.setMoving(ms > 0.4, ms); ent.human.fitTo(ent.root.scaling.x); }
 
     // expiry / siege → an account churns
     if (ent.age >= ent.maxLife) { churnAway(ent); return; }

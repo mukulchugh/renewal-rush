@@ -40,10 +40,13 @@ import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator";
+import { CascadedShadowGenerator } from "@babylonjs/core/Lights/Shadows/cascadedShadowGenerator";
 import "@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent";
+import { ReflectionProbe } from "@babylonjs/core/Probes/reflectionProbe"; // IBL: capture the live sky into an env cube
 import { ParticleSystem } from "@babylonjs/core/Particles/particleSystem";
 import { PhysicsAggregate } from "@babylonjs/core/Physics/v2/physicsAggregate"; // static colliders (only used when ctx.useHavok)
 import { PhysicsShapeType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugin";
+import { applyTextureSet, applyEnvIfPresent } from "./assets.js"; // optional real-art overrides (procedural is the fallback)
 import { ACCOUNTS, accountFor } from "./accounts.js";
 import { RENEWAL_MS } from "./game.js"; // day-night cycle is driven by the renewal clock
 
@@ -223,15 +226,51 @@ export function createWorld(ctx) {
   sun.diffuse = new Color3(1.0, 0.97, 0.9);          // warm sunlight
   sun.specular = new Color3(1.0, 0.98, 0.92);
 
-  const shadowGen = new ShadowGenerator(2048, sun);
-  shadowGen.useBlurExponentialShadowMap = true;
-  shadowGen.blurKernel = 24;
-  shadowGen.bias = 0.0009;
+  // Cascaded shadow maps: 4 cascades sized to the camera frustum beat one 2048 map
+  // stretched over a 360-unit outdoor scene — crisp shadows underfoot AND out to the
+  // skyline, instead of soft mush everywhere. Drop-in: addShadowCaster is inherited.
+  const shadowGen = new CascadedShadowGenerator(1024, sun);
+  shadowGen.numCascades = 4;
+  shadowGen.lambda = 0.85;              // bias cascade splits toward the camera (sharp near shadows)
+  shadowGen.cascadeBlendPercentage = 0.04; // hide cascade seams
+  shadowGen.stabilizeCascades = true;  // kill edge shimmer as the sun arcs through the day/night cycle
+  shadowGen.shadowMaxZ = 520;          // cover visible city depth; beyond this, no shadow (cheap)
+  shadowGen.depthClamp = true;
+  shadowGen.filter = ShadowGenerator.FILTER_PCF;        // smooth, reliable (PCSS can fizzle on thin geo)
+  shadowGen.filteringQuality = ShadowGenerator.QUALITY_HIGH;
+  shadowGen.bias = 0.012;
+  shadowGen.normalBias = 0.02;
   if (typeof shadowGen.setDarkness === "function") shadowGen.setDarkness(0.34);
 
   // ── Texture helpers (sharp: mipmaps + trilinear + anisotropy on every tiled map) ──
   const sharpen = (tex, aniso = 16) => { try { tex.anisotropicFilteringLevel = aniso; } catch { /* noop */ } return tex; };
   const wrapTiled = (tex, aniso = 16) => { tex.wrapU = Texture.WRAP_ADDRESSMODE; tex.wrapV = Texture.WRAP_ADDRESSMODE; return sharpen(tex, aniso); };
+
+  // Derive a tangent-space normal map from a drawn texture's luminance (bright ≈ high).
+  // Cheap one-time CPU Sobel at load. Gives the flat procedural surfaces real micro-relief
+  // (asphalt grain, sidewalk/paver seams, window mullions) so the new IBL/SSR/shadows have
+  // surface detail to react to — a genuine "flat → real" step with zero art assets. The
+  // authored-normal path in assets.js overrides this when a real map is supplied.
+  // strength = bump amount; verify-tunable (flip mat.invertNormalMapY if relief reads inverted).
+  const deriveNormalMap = (srcTex, name, strength = 2.0) => {
+    try {
+      const { width: W, height: H } = srcTex.getSize();
+      const src = srcTex.getContext().getImageData(0, 0, W, H).data;
+      const L = (x, y) => { x = (x % W + W) % W; y = (y % H + H) % H; const i = (y * W + x) << 2; return (src[i] * 0.299 + src[i + 1] * 0.587 + src[i + 2] * 0.114) / 255; };
+      const out = track(texes, new DynamicTexture(name, { width: W, height: H }, scene, true));
+      const octx = out.getContext(); const img = octx.createImageData(W, H); const o = img.data;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const dx = (L(x - 1, y) - L(x + 1, y)) * strength;
+        const dy = (L(x, y - 1) - L(x, y + 1)) * strength;
+        const inv = 1 / Math.sqrt(dx * dx + dy * dy + 1);
+        const i = (y * W + x) << 2;
+        o[i] = (dx * inv * 0.5 + 0.5) * 255; o[i + 1] = (dy * inv * 0.5 + 0.5) * 255; o[i + 2] = (inv * 0.5 + 0.5) * 255; o[i + 3] = 255;
+      }
+      octx.putImageData(img, 0, 0); out.update(false);
+      out.wrapU = Texture.WRAP_ADDRESSMODE; out.wrapV = Texture.WRAP_ADDRESSMODE; sharpen(out, 8);
+      return out;
+    } catch { return null; }
+  };
 
   // Asphalt road surface — dark, with fine aggregate + faint patch variation. Tiled, crisp.
   const asphaltTex = track(texes, new DynamicTexture("world_asphalt", { width: 512, height: 512 }, scene, true, Texture.TRILINEAR_SAMPLINGMODE));
@@ -426,22 +465,28 @@ export function createWorld(ctx) {
   const gMat = track(mats, new PBRMaterial("world_ground_mat", scene));
   gMat.albedoColor = new Color3(1, 1, 1);
   gMat.albedoTexture = asphaltTex;
-  gMat.metallic = 0.0; gMat.roughness = 0.95; gMat.environmentIntensity = 0.4;
+  gMat.metallic = 0.0; gMat.roughness = 0.55; gMat.environmentIntensity = 0.7; // wet-asphalt sheen → catches IBL + SSR
   asphaltTex.uScale = groundW / TILE_ASPHALT;
   asphaltTex.vScale = groundD / TILE_ASPHALT;
+  const gN = deriveNormalMap(asphaltTex, "world_asphalt_n", 1.6); // aggregate micro-relief
+  if (gN) { gN.uScale = asphaltTex.uScale; gN.vScale = asphaltTex.vScale; gMat.bumpTexture = gN; gMat.bumpTexture.level = 0.55; }
+  applyTextureSet(gMat, "asphalt", scene, { uScale: asphaltTex.uScale, vScale: asphaltTex.vScale }); // real road art overrides the derived normal
   ground.material = gMat;
 
   // Shared slab materials (one each → consistent tiling via per-mesh faceUV, not per-mat).
-  const mkSlabMat = (name, tex) => {
+  const mkSlabMat = (name, tex, assetKey) => {
     const m = track(mats, new PBRMaterial(name, scene));
     m.albedoColor = new Color3(1, 1, 1); m.albedoTexture = tex;
-    m.metallic = 0.0; m.roughness = 0.9; m.environmentIntensity = 0.35;
+    m.metallic = 0.0; m.roughness = 0.7; m.environmentIntensity = 0.5; // damp concrete → soft IBL sheen
+    const n = deriveNormalMap(tex, name + "_n", 1.8); // seam/grout relief
+    if (n) { m.bumpTexture = n; m.bumpTexture.level = 0.5; }
+    if (assetKey) applyTextureSet(m, assetKey, scene); // real paving art overrides
     return m;
   };
-  const sidewalkMat = mkSlabMat("world_sidewalk_mat", sidewalkTex);
-  const paverMat = mkSlabMat("world_paver_mat", paverTex);
+  const sidewalkMat = mkSlabMat("world_sidewalk_mat", sidewalkTex, "sidewalk");
+  const paverMat = mkSlabMat("world_paver_mat", paverTex, "paver");
   const grassMat = mkSlabMat("world_grass_mat", grassTex);
-  grassMat.roughness = 1.0;
+  grassMat.roughness = 1.0; grassMat.environmentIntensity = 0.3; // grass stays matte
 
   // Lay a flat city-block slab (raised at the curb) with consistently tiled top texture.
   const makeSlab = (cx, cz, w, d, mat, tile, name) => {
@@ -550,6 +595,20 @@ export function createWorld(ctx) {
   starDome.material = starMat; starDome.infiniteDistance = true; starDome.applyFog = false;
   starDome.isPickable = false; starDome.receiveShadows = false;
 
+  // ── Image-based lighting: capture the live sky (dome + sun/moon/stars) into a
+  //    small env cube and feed it to scene.environmentTexture. This is what gives
+  //    PBR surfaces real sky reflections — and because the renderList is only the
+  //    celestial meshes (which recolour through the day/night cycle), the env (and
+  //    every reflection drawn from it) warms at dusk and cools at night for free.
+  //    Tiny renderList + low res + every-other-frame refresh → effectively free. ──
+  const iblProbe = new ReflectionProbe("world_ibl", 128, scene);
+  iblProbe.renderList.push(sky, sunDisc, moonDisc, starDome);
+  iblProbe.cubeTexture.refreshRate = 2; // REFRESHRATE_RENDER_ONEVERYTWOFRAMES
+  iblProbe.position.set(0, 24, (WALL_Z0 + WALL_Z1) / 2);
+  scene.environmentTexture = iblProbe.cubeTexture;
+  scene.environmentIntensity = 1.0;
+  applyEnvIfPresent(scene); // a real prefiltered .env (assets.js) wins over the procedural probe when present
+
   // ── Shared building decoration bases (instanced → batched draw calls). ────────
   const footprints = [];      // { x, z, hw, hd } for collision-free prop scatter
   const critBeacons = [];     // critical-account beacons (pulse to draw the eye)
@@ -570,13 +629,16 @@ export function createWorld(ctx) {
   // Shared facade materials — ONE per health bucket (tint + emissive depend only on bucket;
   // window tiling lives in each building's faceUV geometry, so materials reuse safely).
   const facadeMats = [];
+  const facadeN = deriveNormalMap(facadeTex, "world_facade_n", 2.2); // window mullion / recess relief (shared across buckets)
   for (let b = 0; b < BUCKETS.length; b++) {
     const mat = track(mats, new PBRMaterial(`world_facade_mat_${b}`, scene));
     mat.albedoTexture = facadeTex;
     const tint = new Color3(); Color3.LerpToRef(CONCRETE, BUCKETS[b].c, 0.34, tint);
     mat.albedoColor = tint;
-    mat.metallic = 0.0; mat.roughness = 0.5; mat.environmentIntensity = 0.42;
+    mat.metallic = 0.1; mat.roughness = 0.22; mat.environmentIntensity = 0.85; // glass curtain-wall → mirrors the sky + neighbours (SSR)
     mat.emissiveColor = BUCKETS[b].c.scale(0.05); // near-zero: windows read by albedo, not glow
+    if (facadeN) { mat.bumpTexture = facadeN; mat.bumpTexture.level = 0.6; }
+    applyTextureSet(mat, "facade", scene, { keepAlbedo: true }); // real window relief overrides; keep health tint
     facadeMats.push(mat);
   }
 
@@ -1242,6 +1304,7 @@ export function createWorld(ctx) {
     try { if (clampObserver) scene.onBeforeRenderObservable.remove(clampObserver); } catch { /* noop */ }
     try { bus?.off?.("start", onStart); } catch { /* noop */ }
     try { motes.dispose(); } catch { /* noop */ }
+    try { scene.environmentTexture = null; iblProbe.dispose(); } catch { /* noop */ }
     try { shadowGen.dispose(); } catch { /* noop */ }
     for (const m of meshes) { try { m.dispose(false, false); } catch { /* noop */ } }
     for (const m of mats) { try { m.dispose(true, true); } catch { /* noop */ } }

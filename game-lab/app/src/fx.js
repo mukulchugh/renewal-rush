@@ -55,9 +55,13 @@ const GLOW_DECAY = 2.6; // glow pulse units/sec
 // Bloom: high threshold so only the brightest neon emissives bloom (not the
 // daylight-lit world); gentle weight so card edges pop without a soup.
 const BLOOM_THRESHOLD = 0.9; // only the very brightest pop
-const BLOOM_WEIGHT = 0.25; // gentle
+const BLOOM_WEIGHT = 0.3; // gentle (nudged up: reflective surfaces now add highlights to catch)
 const BLOOM_KERNEL = 32; // tight kernel = sharp halo, not a smear
 const BLOOM_SCALE = 0.5; // half-res bloom buffer (perf; doesn't blur the scene)
+
+// Sharpen: a cheap post pass that crisps edges → reads as higher detail / "real",
+// the opposite of the soft AA-blur look. Subtle; too high rings haloes around contrast.
+const SHARPEN_EDGE = 0.3;
 
 // SSAO: subtle grounding only — must not muddy the bright look.
 const SSAO_RADIUS = 0.9;
@@ -86,9 +90,9 @@ const HITSTOP_SCALE = 0.04; // near-freeze (not 0, so other modules never /0 dt)
 // Tiers MULTIPLY the device-default hardware-scaling baseline, so a retina display keeps
 // its native ratio at tier 0 and we only ever render *coarser*, never finer, than default.
 const QUALITY_TIERS = [
-  { scale: 1.0, ssao: true },   // 0 — full
-  { scale: 1.25, ssao: true },  // 1 — slightly coarser
-  { scale: 1.5, ssao: false },  // 2 — coarse + AO off (last resort)
+  { scale: 1.0, ssao: true, ssr: true },    // 0 — full (reflections on)
+  { scale: 1.25, ssao: true, ssr: false },  // 1 — coarser, drop SSR (the priciest pass)
+  { scale: 1.5, ssao: false, ssr: false },  // 2 — coarse + AO off (last resort)
 ];
 const QUALITY_DOWN_FPS = 50; // sustained below → step down a tier
 const QUALITY_UP_FPS = 58;   // sustained above → step back up a tier
@@ -148,6 +152,11 @@ export function createFx(ctx) {
   pipeline.chromaticAberrationEnabled = false;
   pipeline.grainEnabled = false;
 
+  // Sharpen ON — crisps edges so the scene reads as detailed/real, not soft.
+  pipeline.sharpenEnabled = true;
+  pipeline.sharpen.edgeAmount = SHARPEN_EDGE;
+  pipeline.sharpen.colorAmount = 1.0;
+
   // Tone-mapping for clean color; NO vignette = bright + readable to the edges.
   const ip = pipeline.imageProcessing || null;
   if (ip) {
@@ -187,6 +196,29 @@ export function createFx(ctx) {
     ssao = null; // never let AO block the render path
   }
 
+  // ── SSR — screen-space reflections (WebGL2 / prepass) ──────────────────────
+  // The "wet realistic city" look: buildings + neon emissives reflect on the
+  // streets. Only shows where a surface is reflective enough (low roughness) —
+  // world.js lowers roughness on glass facades + asphalt so this reads. Priciest
+  // pass in the stack, so adaptive quality drops it first (tier 1+). PLAYTEST-TUNABLE.
+  let ssr = null;
+  try {
+    ssr = new SSRRenderingPipeline("rr-ssr", scene, [camera]); // default prepass path
+    ssr.strength = 0.85;            // overall reflection intensity
+    ssr.reflectivityThreshold = 0.04; // ignore near-matte pixels
+    ssr.roughnessFactor = 0.2;      // jitter rays by surface roughness (soft, real)
+    ssr.blurDispersionStrength = 0.03;
+    ssr.blurDownsample = 1;         // half-res blur (perf; reflections are soft anyway)
+    ssr.maxDistance = 350;          // city-scale rays
+    ssr.maxSteps = 1500;
+    ssr.step = 4;                   // 2D march stride (perf vs accuracy)
+    ssr.thickness = 0.6;
+    ssr.enableSmoothReflections = true;
+    ssr.selfCollisionNumSkip = 2;   // avoid surface self-reflection artifacts
+  } catch {
+    ssr = null; // never let SSR block the render path
+  }
+
   // ── Adaptive quality state ─────────────────────────────────────────────────
   // Baseline = the device-default hardware scaling (engine was created with
   // adaptToDeviceRatio, so this is 1/devicePixelRatio on retina). Tiers scale it.
@@ -197,6 +229,7 @@ export function createFx(ctx) {
   const applyQualityTier = () => {
     const t = QUALITY_TIERS[qualityTier];
     try { engine.setHardwareScalingLevel(baseHwScale * t.scale); } catch { /* noop */ }
+    if (ssr) { try { ssr.isEnabled = t.ssr; } catch { /* noop */ } } // drop reflections under load
     // Actually detach/attach the SSAO pipeline (zeroing strength still runs the passes).
     if (ssao && t.ssao !== ssaoAttached) {
       const mgr = scene.postProcessRenderPipelineManager;
@@ -576,6 +609,7 @@ export function createFx(ctx) {
       motionBlur && motionBlur.dispose();
     } catch {}
     try {
+      ssr && ssr.dispose();
       ssao && ssao.dispose();
     } catch {}
     try {

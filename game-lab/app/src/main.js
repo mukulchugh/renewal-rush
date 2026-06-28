@@ -15,6 +15,7 @@ import { createBrand } from "./brand.js";
 import { createEnemies } from "./enemies.js";
 import { createCombat } from "./combat.js";
 import { createController } from "./controller.js";
+import { createAmbient } from "./ambient.js";
 import { createMeta } from "./meta.js";
 
 const canvas = document.getElementById("game");
@@ -94,6 +95,19 @@ if (ctx.useHavok) {
   }
 }
 
+// Shared human character model (used by the player avatar + enemies). Visual only — loads
+// with or without Havok. If it fails, modules fall back to the procedural primitive rig.
+try {
+  const [{ LoadAssetContainerAsync }] = await Promise.all([
+    import("@babylonjs/core/Loading/sceneLoader"),
+    import("@babylonjs/loaders/glTF"), // registers the glTF/GLB loader
+  ]);
+  ctx.humanAsset = await LoadAssetContainerAsync("/models/xbot.glb", scene); // Mixamo X Bot (idle/run rig)
+} catch (e) {
+  console.error("human model load failed — using primitive avatars", e);
+  ctx.humanAsset = null;
+}
+
 // Init order (ARCHITECTURE.md): fx -> world -> audio -> hud -> brand -> enemies -> combat -> controller.
 const step = (name, fn) => {
   try { return fn(); }
@@ -109,6 +123,7 @@ step("audio", () => createAudio(ctx));
 step("hud", () => createHud(ctx));
 ctx.brand = step("brand", () => createBrand(ctx));
 step("enemies", () => createEnemies(ctx));
+step("ambient", () => createAmbient(ctx)); // decorative street traffic — no game-state coupling
 step("combat", () => createCombat(ctx));
 step("controller", () => createController(ctx));
 // Stickiness layer last: needs ctx.brand (showResult) + must run its Last-Stand timeScale
