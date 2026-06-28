@@ -675,7 +675,11 @@ export function createMeta(ctx = {}) {
     // world re-arms to -1 on start, so Connect (index 0) re-announces every run: never draft it.
     // De-dupe by index so a backtrack into an already-cleared sector won't re-offer a draft.
     const idx = sectorIndexFor(e);
-    if (idx <= 0 || draftedSectors.has(idx)) return;
+    // ONE upgrade draft per run. Was every sector boundary → 3 blocking pauses in a 90s
+    // run, which (especially now the finish line pulls the player through every sector)
+    // reads as "again and again" and interrupts the action. First eligible sector only;
+    // the rest plays uninterrupted. To restore per-sector drafts, drop the `.size` clause.
+    if (idx <= 0 || draftedSectors.size >= 1 || draftedSectors.has(idx)) return;
     draftedSectors.add(idx);
     openDraft(idx, e.name);
   });
