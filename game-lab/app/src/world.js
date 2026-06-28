@@ -606,7 +606,11 @@ export function createWorld(ctx) {
   iblProbe.cubeTexture.refreshRate = 2; // REFRESHRATE_RENDER_ONEVERYTWOFRAMES
   iblProbe.position.set(0, 24, (WALL_Z0 + WALL_Z1) / 2);
   scene.environmentTexture = iblProbe.cubeTexture;
-  scene.environmentIntensity = 1.0;
+  // 0.6, not 1.0: the bright daytime sky probe at full strength floods the scene with
+  // flat omnidirectional fill that overpowers the 0.55 sun → milky, low-contrast, the
+  // opposite of photoreal. Keep IBL as a *subtle* fill so the directional sun + shadows
+  // read; reflections on cars/glass still land (they scale with this, but stay visible).
+  scene.environmentIntensity = 0.6;
   applyEnvIfPresent(scene); // a real prefiltered .env (assets.js) wins over the procedural probe when present
 
   // ── Shared building decoration bases (instanced → batched draw calls). ────────
