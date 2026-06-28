@@ -794,7 +794,7 @@ export function createEnemies(ctx) {
     ent.bodyMeshes = [torso, head, armL, armR, legL, legR, core, neck, pelvis, padL, padR, handL, handR, footL, footR, helmet, visor];
     if (crown) ent.bodyMeshes.push(crown);
     ent.human = ctx.humanAsset
-      ? spawnHuman(ctx.humanAsset, root, Vector3, { faceYaw: 0, gun, tint: coreBase })
+      ? spawnHuman(ctx.humanAsset, root, Vector3, { faceYaw: 0, gun, gunAsset: ctx.gunAsset, tint: coreBase })
       : null;
     if (ent.human) for (const m of ent.bodyMeshes) m.setEnabled(false);
 

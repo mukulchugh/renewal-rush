@@ -361,7 +361,7 @@ export function createController(ctx) {
     // primitive look if the shared asset is absent.
     let human = null;
     if (ctx.humanAsset) {
-      human = spawnHuman(ctx.humanAsset, root, Vector3, { faceYaw: 0, gun, tint: Color3.FromHexString(CFG.avBright) });
+      human = spawnHuman(ctx.humanAsset, root, Vector3, { faceYaw: 0, gun, gunAsset: ctx.gunAsset, tint: Color3.FromHexString(CFG.avBright) });
       for (const m of [torso, pelvis, core, head, visor, armL, armR, legL, legR]) m.setEnabled(false);
     }
 

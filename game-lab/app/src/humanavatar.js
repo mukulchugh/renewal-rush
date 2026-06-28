@@ -31,10 +31,26 @@ function worldYExtent(node) {
   return { minY, maxY, h: Math.max(1e-3, maxY - minY) };
 }
 
+// Longest world-space dimension of a hierarchy (used to size the gun model to a target length).
+function maxDim(node) {
+  let lx = Infinity, ly = Infinity, lz = Infinity, hx = -Infinity, hy = -Infinity, hz = -Infinity;
+  for (const m of node.getChildMeshes(false)) {
+    if (!m.getBoundingInfo) continue;
+    m.computeWorldMatrix(true);
+    const bb = m.getBoundingInfo().boundingBox;
+    lx = Math.min(lx, bb.minimumWorld.x); hx = Math.max(hx, bb.maximumWorld.x);
+    ly = Math.min(ly, bb.minimumWorld.y); hy = Math.max(hy, bb.maximumWorld.y);
+    lz = Math.min(lz, bb.minimumWorld.z); hz = Math.max(hz, bb.maximumWorld.z);
+  }
+  if (!isFinite(lx)) return 1;
+  return Math.max(hx - lx, hy - ly, hz - lz);
+}
+
 // asset: shared AssetContainer (ctx.humanAsset). parent: the rig's TransformNode (root).
 // opts: { targetHeight, faceYaw, gun (mesh→right hand), gunOffset, tint (Color3) }
 export function spawnHuman(asset, parent, Vector3, opts = {}) {
-  const { targetHeight = HUMAN_HEIGHT, faceYaw = 0, gun = null, gunOffset = null, tint = null } = opts;
+  const { targetHeight = HUMAN_HEIGHT, faceYaw = 0, gun = null, gunOffset = null, tint = null,
+    gunAsset = null, gunModelOffset = null, gunModelRot = null, gunLength = 0.62 } = opts;
   const scene = parent.getScene();
   // Clone materials per-instance only when we need a per-character tint (else share for perf).
   const inst = asset.instantiateModelsToScene(undefined, !!tint);
@@ -73,18 +89,46 @@ export function spawnHuman(asset, parent, Vector3, opts = {}) {
   if (idle) idle.start(true);
   if (move) { move.start(true); move.pause(); }
 
-  // Gun into the right-hand bone (counter-scale by 1/s so it stays world-sized in bone space).
+  // Gun into the right-hand bone. attachToBone's affector must be the SKINNED mesh (not the
+  // holder) or the gun lands off-hand. Bone space carries the full armature scale (Mixamo can
+  // be ~100×), so we decompose the gun's resulting world scale and counter it — that's the
+  // robust way to keep the gun its authored world size regardless of the model's units.
   const skel = (inst.skeletons && inst.skeletons[0]) || null;
-  if (gun && skel && skel.bones.length) {
+  const skinned = holder.getChildMeshes(false).find((m) => m.skeleton) || null;
+  if (gun && skel && skel.bones.length && skinned) {
     const hand = skel.bones.find((b) => RIGHT_HAND_RE.test(b.name || ""))
       || skel.bones.find((b) => /(right|_R\b)/i.test(b.name || ""))
       || skel.bones[skel.bones.length - 1];
     if (hand) {
       gun.parent = null;
-      gun.attachToBone(hand, holder);
-      gun.scaling.setAll(1 / s);
+      gun.scaling.setAll(1);
+      gun.attachToBone(hand, skinned);
+      gun.computeWorldMatrix(true);
+      const ws = new Vector3();
+      gun.getWorldMatrix().decompose(ws, undefined, undefined);
+      gun.scaling.setAll(1 / Math.max(1e-4, ws.x)); // counter the bone-chain scale → world-sized
       gun.position.copyFrom(gunOffset || new Vector3(0, 0, 0));
     }
+  } else if (gun) {
+    // No skeleton/bone match → keep a visible gun parented to the holder near the right hand.
+    gun.parent = holder;
+    gun.scaling.setAll(1 / s);
+    gun.position.set(0.25 / s, (HUMAN_HEIGHT * 0.55) / s, 0.2 / s);
+  }
+
+  // Real gun MODEL rides the hand-attached carrier. The carrier (box/transform) stays as the
+  // muzzle + shot anchor combat reads — we just hide its primitive render and show the model.
+  if (gun && gunAsset) {
+    const gi = gunAsset.instantiateModelsToScene(undefined, false);
+    const gm = gi.rootNodes[0];
+    gm.parent = null; gm.position.setAll(0); gm.rotation = new Vector3(0, 0, 0); gm.scaling.setAll(1);
+    gm.computeWorldMatrix(true);
+    gm.scaling.setAll(gunLength / Math.max(1e-3, maxDim(gm))); // size by longest axis → gunLength
+    gm.parent = gun;
+    gm.position.copyFrom(gunModelOffset || new Vector3(0, 0, 0));
+    gm.rotation = gunModelRot ? gunModelRot.clone() : new Vector3(0, Math.PI / 2, 0); // tune to hand
+    for (const cm of (gun.getChildMeshes ? gun.getChildMeshes(false) : [])) cm.isVisible = false;
+    if (typeof gun.isVisible === "boolean") gun.isVisible = false; // hide the box carrier
   }
 
   const footY = -ext.minY * s; // world feet offset at root.scaling == 1
