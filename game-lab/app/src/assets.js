@@ -52,6 +52,21 @@ const TEX = {
     roughness: "/assets/facade018a/Facade018A_2K-JPG_Roughness.jpg",
     ao: "/assets/facade018a/Facade018A_2K-JPG_AmbientOcclusion.jpg",
   },
+  // Brushed metal (ambientCG Metal046A, CC0). For structural metal — gate pillars,
+  // lamp posts. Caller sets mat.metallic high (the Metalness map is ~uniform, so the
+  // scalar is equivalent); the roughness map gives the brushed sheen that catches the HDRI.
+  metal: {
+    albedo: "/assets/metal046a/Metal046A_1K-JPG_Color.jpg",
+    normal: "/assets/metal046a/Metal046A_1K-JPG_NormalGL.jpg",
+    roughness: "/assets/metal046a/Metal046A_1K-JPG_Roughness.jpg",
+  },
+  // Brick (ambientCG Bricks097, CC0). Real-relief brick for masonry surfaces.
+  brick: {
+    albedo: "/assets/bricks097/Bricks097_1K-JPG_Color.jpg",
+    normal: "/assets/bricks097/Bricks097_1K-JPG_NormalGL.jpg",
+    roughness: "/assets/bricks097/Bricks097_1K-JPG_Roughness.jpg",
+    ao: "/assets/bricks097/Bricks097_1K-JPG_AmbientOcclusion.jpg",
+  },
 };
 
 // A real environment map — overrides the procedural sky-probe IBL in world.js for
