@@ -670,18 +670,13 @@ export function createMeta(ctx = {}) {
 
   on("start", () => { resetRun(); });
 
-  on("zone", (e = {}) => {
-    if (disposed || game?.status !== "running") return;
-    // world re-arms to -1 on start, so Connect (index 0) re-announces every run: never draft it.
-    // De-dupe by index so a backtrack into an already-cleared sector won't re-offer a draft.
-    const idx = sectorIndexFor(e);
-    // ONE upgrade draft per run. Was every sector boundary → 3 blocking pauses in a 90s
-    // run, which (especially now the finish line pulls the player through every sector)
-    // reads as "again and again" and interrupts the action. First eligible sector only;
-    // the rest plays uninterrupted. To restore per-sector drafts, drop the `.size` clause.
-    if (idx <= 0 || draftedSectors.size >= 1 || draftedSectors.has(idx)) return;
-    draftedSectors.add(idx);
-    openDraft(idx, e.name);
+  on("zone", () => {
+    // Upgrade-draft auto-pop REMOVED (user request): the big, game-pausing full-screen pick
+    // overlay interrupted the action and wasn't wanted. No draft is offered on sector
+    // boundaries anymore — the run plays straight through. (Sector wayfinding still comes from
+    // the HUD's own "zone" handling; the applyPick path below still works if a pick is ever
+    // routed in externally.) To bring it back, restore the sectorIndexFor → draftedSectors →
+    // openDraft logic here (openDraft/offerOptions/showDraftUI are kept intact below).
   });
 
   // External pick path (e.g. a HUD-rendered picker) routes through the same apply-once code.
