@@ -6,8 +6,9 @@
 // a static sky — acceptable; revisit if the mismatch reads wrong.
 
 import { HDRCubeTexture } from "@babylonjs/core/Materials/Textures/hdrCubeTexture";
+import "@babylonjs/core/Helpers/sceneHelpers"; // side-effect: registers scene.createDefaultSkybox (à-la-carte build omits it otherwise)
 
-const PROC_SKY_MESHES = ["world_skydome", "world_sun_disc", "world_moon_disc", "world_stars"];
+const PROC_SKY_MESHES = ["world_skydome", "world_sun_disc", "world_moon_disc", "world_stardome"];
 
 export function createSky(ctx) {
   const { scene } = ctx;
