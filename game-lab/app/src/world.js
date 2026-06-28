@@ -234,7 +234,7 @@ export function createWorld(ctx) {
   shadowGen.lambda = 0.85;              // bias cascade splits toward the camera (sharp near shadows)
   shadowGen.cascadeBlendPercentage = 0.04; // hide cascade seams
   shadowGen.stabilizeCascades = true;  // kill edge shimmer as the sun arcs through the day/night cycle
-  shadowGen.shadowMaxZ = 520;          // cover visible city depth; beyond this, no shadow (cheap)
+  shadowGen.shadowMaxZ = 340;          // shadow depth tightened from 520 → fewer distant building casters in the cascades (CPU draw-call cut); distant shadows are tiny on screen so the look holds
   shadowGen.depthClamp = true;
   shadowGen.filter = ShadowGenerator.FILTER_PCF;        // smooth, reliable (PCSS can fizzle on thin geo)
   shadowGen.filteringQuality = ShadowGenerator.QUALITY_HIGH;
@@ -472,6 +472,7 @@ export function createWorld(ctx) {
   if (gN) { gN.uScale = asphaltTex.uScale; gN.vScale = asphaltTex.vScale; gMat.bumpTexture = gN; gMat.bumpTexture.level = 0.55; }
   applyTextureSet(gMat, "asphalt", scene, { uScale: asphaltTex.uScale, vScale: asphaltTex.vScale }); // real road art overrides the derived normal
   ground.material = gMat;
+  ground.freezeWorldMatrix(); // static base plane → skip per-frame world-matrix recompute
 
   // Shared slab materials (one each → consistent tiling via per-mesh faceUV, not per-mat).
   const mkSlabMat = (name, tex, assetKey) => {
@@ -485,7 +486,9 @@ export function createWorld(ctx) {
   };
   const sidewalkMat = mkSlabMat("world_sidewalk_mat", sidewalkTex, "sidewalk");
   const paverMat = mkSlabMat("world_paver_mat", paverTex, "paver");
-  const grassMat = mkSlabMat("world_grass_mat", grassTex);
+  // Real CC0 grass (ambientCG Grass004) over the procedural base → natural lawn, not flat neon green.
+  // Tiles via the slab faceUV (TILE_GRASS) like the other slabs; same set used on canopies/bushes.
+  const grassMat = mkSlabMat("world_grass_mat", grassTex, "foliage");
   grassMat.roughness = 1.0; grassMat.environmentIntensity = 0.3; // grass stays matte
 
   // Lay a flat city-block slab (raised at the curb) with consistently tiled top texture.
@@ -498,6 +501,7 @@ export function createWorld(ctx) {
     const s = track(meshes, MeshBuilder.CreateBox(name, { width: w, height: 0.2, depth: d, wrap: true, faceUV }, scene));
     s.position.set(cx, 0.1, cz);
     s.material = mat; s.isPickable = false; s.receiveShadows = true;
+    s.freezeWorldMatrix(); // static block slab → skip per-frame world-matrix recompute
     return s;
   };
 
@@ -686,6 +690,7 @@ export function createWorld(ctx) {
     body.isPickable = false; body.checkCollisions = true; body.receiveShadows = true;
     body.material = facadeMats[bucketIdx];
     shadowGen.addShadowCaster(body);
+    body.freezeWorldMatrix(); // static building → skip per-frame world-matrix recompute (CPU; scene is CPU-bound)
 
     // Roof cap.
     const capH = 0.9 + H * 0.012;
@@ -748,27 +753,40 @@ export function createWorld(ctx) {
   };
 
   // ── Nature prop bases (round + pine trees, bushes) — used in parks/plazas/streets. ──
+  // Real CC0 bark on the trunk so it stops reading as a flat brown cylinder. vScale 3 = bark
+  // repeats up the 6m trunk; bark albedo is authored, the brown tint just biases it warmer.
   const trunkMat = track(mats, new PBRMaterial("world_trunk_mat", scene));
   trunkMat.albedoColor = Color3.FromHexString("#6b4a2b"); trunkMat.metallic = 0; trunkMat.roughness = 0.9;
+  applyTextureSet(trunkMat, "bark", scene, { uScale: 2, vScale: 3 });
   const trunk = track(meshes, MeshBuilder.CreateCylinder("world_trunk", { height: 6, diameterBottom: 1.1, diameterTop: 0.7, tessellation: 7 }, scene));
   trunk.material = trunkMat; trunk.isPickable = false; trunk.receiveShadows = true; trunk.setEnabled(false);
   shadowGen.addShadowCaster(trunk);
 
+  // Canopy: real foliage texture tiled small breaks the flat-green sphere into leafy clumps; the
+  // green albedoColor tint multiplies the texture toward forest green (PBR multiplies tint×tex).
+  // segments 8 (was 6) softens the facets; roundTree gives each instance a non-uniform (ellipsoid)
+  // scale so they stop reading as identical topiary balls. Draw calls stay flat (still instanced).
   const roundMat = track(mats, new PBRMaterial("world_round_mat", scene));
-  roundMat.albedoColor = Color3.FromHexString("#3f8f3a"); roundMat.metallic = 0; roundMat.roughness = 0.95;
-  const roundFol = track(meshes, MeshBuilder.CreateSphere("world_round_fol", { diameter: 7, segments: 6 }, scene));
+  roundMat.metallic = 0; roundMat.roughness = 0.95;
+  applyTextureSet(roundMat, "foliage", scene, { uScale: 3, vScale: 3 });
+  roundMat.albedoColor = Color3.FromHexString("#5c7e3c"); // forest-green tint over the foliage tex
+  const roundFol = track(meshes, MeshBuilder.CreateSphere("world_round_fol", { diameter: 7, segments: 8 }, scene));
   roundFol.material = roundMat; roundFol.isPickable = false; roundFol.setEnabled(false);
   shadowGen.addShadowCaster(roundFol);
 
   const pineMat = track(mats, new PBRMaterial("world_pine_mat", scene));
-  pineMat.albedoColor = Color3.FromHexString("#2f7a44"); pineMat.metallic = 0; pineMat.roughness = 0.95;
+  pineMat.metallic = 0; pineMat.roughness = 0.95;
+  applyTextureSet(pineMat, "foliage", scene, { uScale: 2, vScale: 2 });
+  pineMat.albedoColor = Color3.FromHexString("#456e3a"); // darker conifer tint
   const pineCone = track(meshes, MeshBuilder.CreateCylinder("world_pine_cone", { height: 5, diameterBottom: 4.6, diameterTop: 0, tessellation: 8 }, scene));
   pineCone.material = pineMat; pineCone.isPickable = false; pineCone.setEnabled(false);
   shadowGen.addShadowCaster(pineCone);
 
   const bushMat = track(mats, new PBRMaterial("world_bush_mat", scene));
-  bushMat.albedoColor = Color3.FromHexString("#4ea049"); bushMat.metallic = 0; bushMat.roughness = 1;
-  const bush = track(meshes, MeshBuilder.CreateSphere("world_bush", { diameter: 2.4, segments: 6 }, scene));
+  bushMat.metallic = 0; bushMat.roughness = 1;
+  applyTextureSet(bushMat, "foliage", scene, { uScale: 2, vScale: 2 });
+  bushMat.albedoColor = Color3.FromHexString("#5f8a40"); // hedge green
+  const bush = track(meshes, MeshBuilder.CreateSphere("world_bush", { diameter: 2.4, segments: 8 }, scene));
   bush.material = bushMat; bush.isPickable = false; bush.receiveShadows = true; bush.setEnabled(false);
 
   // Bench (seat + back) + planter bases.
@@ -796,7 +814,11 @@ export function createWorld(ctx) {
 
   const roundTree = (x, z, sc) => {
     const tk = placedTrunk(); tk.position.set(x, 3 * sc, z); tk.scaling.setAll(sc); tk.isPickable = false;
-    const fl = placedRound(); fl.position.set(x, 6.4 * sc, z); fl.scaling.setAll(sc * rand(0.85, 1.2)); fl.isPickable = false;
+    // Non-uniform per-instance scale → each canopy is a slightly squashed/stretched ellipsoid with
+    // a random spin, so they read as varied foliage masses, not identical topiary balls. Free (no draw calls).
+    const fl = placedRound(); fl.position.set(x, 6.4 * sc, z);
+    fl.scaling.set(sc * rand(0.85, 1.2), sc * rand(0.78, 1.05), sc * rand(0.85, 1.2));
+    fl.rotation.y = rand(0, Math.PI * 2); fl.isPickable = false;
   };
   const pineTree = (x, z, sc) => {
     const tk = placedTrunk(); tk.position.set(x, 3 * sc, z); tk.scaling.set(sc * 0.7, sc, sc * 0.7); tk.isPickable = false;
@@ -992,12 +1014,17 @@ export function createWorld(ctx) {
     const l = lampN++ === 0 ? (lampBase.setEnabled(true), lampBase) : lampBase.createInstance(`world_lamp_${lampN}`);
     l.position.set(x - side * 2.8, 7.4, z); l.isPickable = false;
   };
+  // A canopy (radius ~5 at scale 1.5) clips a building if its center lands within ~6m of a
+  // footprint, which is why boulevard trees were punching into facades. Skip those spots.
+  const clearOfBuildings = (px, pz, m = 6) =>
+    !footprints.some((f) => Math.abs(px - f.x) < f.hw + m && Math.abs(pz - f.z) < f.hd + m);
   let sli = 0;
   for (let z = BOUNDS.minZ + 16; z < BOUNDS.maxZ - 8; z += 26) {
     const side = (sli % 2 === 0) ? 1 : -1; sli++;
     placeStreetlight(side * 18.5, z, side);
-    // a street tree opposite the light, on the other sidewalk edge
-    roundTree(-side * 20, z + 13, rand(1.0, 1.5));
+    // a street tree opposite the light, on the other sidewalk edge — only where it won't clip a building
+    const tx = -side * 20, tz = z + 13;
+    if (clearOfBuildings(tx, tz)) roundTree(tx, tz, rand(1.0, 1.5));
   }
 
   // ── CHURNED wasteland — the grim far edge beyond the gate (you keep accounts out). ──

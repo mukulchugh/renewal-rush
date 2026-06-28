@@ -532,7 +532,7 @@ export function createHud(ctx = {}) {
     opts.forEach((opt, idx) => {
       const card = document.createElement("button");
       card.type = "button";
-      card.className = "rr-card";
+      card.className = "rr-card rr-card--" + (idx % 3); // per-option accent (emerald/cyan/gold)
       card.innerHTML =
         `<span class="rr-card__glyph">${esc(opt.glyph || "✦")}</span>` +
         `<span class="rr-card__tag">${esc(opt.tag || "Upgrade")}</span>` +
@@ -1461,17 +1461,22 @@ const CSS = `
 .rr-draft__head span{font-size:.72rem; color:var(--mute);}
 .rr-draft__cards{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; width:100%;}
 @media (max-width:640px){.rr-draft__cards{grid-template-columns:1fr;}}
-.rr-card{pointer-events:auto; cursor:pointer; display:flex; flex-direction:column; align-items:flex-start; gap:8px;
+.rr-card{position:relative; overflow:hidden; --cc:var(--accent-soft);
+  pointer-events:auto; cursor:pointer; display:flex; flex-direction:column; align-items:flex-start; gap:8px;
   text-align:left; padding:18px 16px; border:1px solid var(--hair); border-radius:16px; color:var(--ink);
   background:var(--glass); backdrop-filter:blur(11px) saturate(150%); -webkit-backdrop-filter:blur(11px) saturate(150%);
   box-shadow:0 14px 40px -12px rgba(0,0,0,.7); transition:transform .15s ease, border-color .15s ease, box-shadow .15s ease;}
-.rr-card:hover{transform:translateY(-3px); border-color:rgba(43,217,138,.6);
-  box-shadow:0 22px 50px -14px rgba(43,217,138,.55), 0 0 0 1px rgba(43,217,138,.3) inset;}
-.rr-card__glyph{font-size:1.6rem; line-height:1; color:var(--accent-soft); text-shadow:0 0 16px rgba(43,217,138,.6);}
+/* per-option accent: instantly distinguishable upgrade choices. idx-cycled (data-independent). */
+.rr-card::before{content:""; position:absolute; inset:0 0 auto 0; height:3px;
+  background:linear-gradient(90deg,transparent,var(--cc),transparent); opacity:.85;}
+.rr-card--0{--cc:#2BD98A;} .rr-card--1{--cc:#67E8F9;} .rr-card--2{--cc:#FCD34D;}
+.rr-card:hover{transform:translateY(-3px); border-color:color-mix(in srgb,var(--cc) 60%,transparent);
+  box-shadow:0 22px 50px -14px color-mix(in srgb,var(--cc) 50%,transparent), 0 0 0 1px color-mix(in srgb,var(--cc) 30%,transparent) inset;}
+.rr-card__glyph{font-size:1.6rem; line-height:1; color:var(--cc); text-shadow:0 0 16px color-mix(in srgb,var(--cc) 60%,transparent);}
 .rr-card__tag{font-family:var(--mono); font-size:.54rem; letter-spacing:.12em; text-transform:uppercase; color:var(--mute);}
 .rr-card__name{font-weight:800; font-size:1.05rem; letter-spacing:.01em;}
 .rr-card__desc{font-size:.72rem; color:var(--mute); line-height:1.4; flex:1;}
-.rr-card__pick{font-family:var(--mono); font-size:.62rem; color:var(--accent-soft); letter-spacing:.06em;}
+.rr-card__pick{font-family:var(--mono); font-size:.62rem; color:var(--cc); letter-spacing:.06em;}
 
 /* ── end cinematic (separate body layer, ABOVE brand.js, never blocking) ──── */
 .rr-endlayer{position:fixed; inset:0; z-index:2147483600; pointer-events:none;
