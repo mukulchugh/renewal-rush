@@ -571,13 +571,15 @@ export function createHud(ctx = {}) {
     hideEnd();
     if (el.timerLabel) el.timerLabel.textContent = "Expansion Run";
     if (el.overtime) restart(el.overtime, "rr-show");
-    callout("OVERTIME — EXPANSION RUN", "accent");
+    // No callout here: the persistent .rr-overtime banner already announces this. Firing
+    // both showed the SAME update as two slightly-different texts ("· " vs "— "). One source.
   }
   function triggerLastStand() {
     if (lastStandShown || overtimeActive) return;
     lastStandShown = true;
     if (el.laststand) restart(el.laststand, "rr-show");
-    callout("FOCUS — LAST STAND", "gold");
+    // No callout here: the persistent .rr-laststand banner already announces this (same
+    // double-text issue as overtime). One source per update.
   }
 
   // ---- end cinematic (layered above brand, never blocking) -----------------
