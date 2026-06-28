@@ -18,10 +18,41 @@
         position: fixed; inset: 0; width: 100%; height: 100%;
         display: block; outline: none; touch-action: none; background: var(--bg);
       }
+      /* Loading screen — shown instantly (static markup, no JS needed), removed by
+         main.js only once the scene + every texture + the HDR sky/env are ready, so the
+         player never sees texture pop-in or the sky's cold-load white-out. */
+      #rr-loading {
+        position: fixed; inset: 0; z-index: 2147483600;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 26px; text-align: center; transition: opacity .6s ease;
+        background: radial-gradient(120% 90% at 50% 38%, #0e2a1d 0%, #0a0a0a 62%);
+      }
+      #rr-loading .rrl-badge {
+        font: 600 12px/1 "IBM Plex Mono", monospace; letter-spacing: .18em; text-transform: uppercase;
+        color: #34d399; border: 1px solid rgba(52,211,153,.4); border-radius: 999px; padding: 8px 16px;
+      }
+      #rr-loading .rrl-title {
+        font: 800 clamp(48px,11vw,128px)/.9 Inter, sans-serif; letter-spacing: -.02em;
+        background: linear-gradient(180deg,#d6ffe9,#34d399);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+      #rr-loading .rrl-spinner {
+        width: 42px; height: 42px; border-radius: 50%;
+        border: 3px solid rgba(52,211,153,.18); border-top-color: #34d399;
+        animation: rrl-spin .8s linear infinite;
+      }
+      #rr-loading .rrl-sub { font: 600 14px/1 Inter, sans-serif; color: #7a8a82; letter-spacing: .04em; }
+      @keyframes rrl-spin { to { transform: rotate(360deg); } }
     </style>
   </head>
   <body>
     <canvas id="game" tabindex="0"></canvas>
+    <div id="rr-loading">
+      <span class="rrl-badge">Quivly Agent Ops</span>
+      <div class="rrl-title">RENEWAL<br />RUSH</div>
+      <div class="rrl-spinner"></div>
+      <div class="rrl-sub">Spinning up the city…</div>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

@@ -245,4 +245,24 @@ engine.onContextLostObservable.add(autoPause);
 engine.onContextRestoredObservable.add(autoResume);
 
 bus.emit("start");
+
+// ── Loading screen: hold the branded #rr-loading overlay (index.html) until the scene is
+// FULLY ready — geometry + every texture + the HDR sky/env prefilter — so the player never
+// sees texture pop-in or the sky's cold-load white-out, and only reaches the DEPLOY AGENTS
+// start screen (which sits underneath) once everything is loaded.
+const loadingEl = typeof document !== "undefined" && document.getElementById("rr-loading");
+if (loadingEl) {
+  const hideLoading = () => {
+    if (loadingEl.dataset.done) return;        // idempotent: executeWhenReady OR the timeout, whichever first
+    loadingEl.dataset.done = "1";
+    loadingEl.style.pointerEvents = "none";    // stop blocking clicks the instant we start fading
+    loadingEl.style.opacity = "0";
+    setTimeout(() => { try { loadingEl.remove(); } catch { /* noop */ } }, 650);
+  };
+  // executeWhenReady polls scene.isReady() each rendered frame → true once active meshes'
+  // materials AND their textures (incl. the skybox HDR + env IBL) have finished loading.
+  scene.executeWhenReady(() => hideLoading(), true);
+  // Safety net: never trap the player behind the loader if an asset stalls or fails to load.
+  setTimeout(hideLoading, 20000);
+}
 })();
