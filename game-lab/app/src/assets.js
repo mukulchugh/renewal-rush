@@ -67,6 +67,19 @@ const TEX = {
     roughness: "/assets/bricks097/Bricks097_1K-JPG_Roughness.jpg",
     ao: "/assets/bricks097/Bricks097_1K-JPG_AmbientOcclusion.jpg",
   },
+  // Tree bark (ambientCG Bark012, CC0). Real relief for trunks — kills the flat-brown-cylinder read.
+  bark: {
+    albedo: "/assets/bark012/Bark012_1K-JPG_Color.jpg",
+    normal: "/assets/bark012/Bark012_1K-JPG_NormalGL.jpg",
+    roughness: "/assets/bark012/Bark012_1K-JPG_Roughness.jpg",
+  },
+  // Foliage (ambientCG Grass004, CC0). Tiled small on canopies/bushes to break the flat
+  // neon-green sphere into organic leafy clumps. Caller keeps a green albedoColor tint.
+  foliage: {
+    albedo: "/assets/grass004/Grass004_1K-JPG_Color.jpg",
+    normal: "/assets/grass004/Grass004_1K-JPG_NormalGL.jpg",
+    roughness: "/assets/grass004/Grass004_1K-JPG_Roughness.jpg",
+  },
 };
 
 // A real environment map — overrides the procedural sky-probe IBL in world.js for

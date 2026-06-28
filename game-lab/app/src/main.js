@@ -20,6 +20,16 @@ import { createSky } from "./sky.js";
 import { createFinish } from "./finish.js";
 import { createMeta } from "./meta.js";
 
+// Platform-agnostic asset caching: register the service worker (public/sw.js) so
+// the heavy media (textures/HDR/GLB/wasm) is served from the device on return
+// visits, regardless of host. PROD-only — a CacheFirst SW in dev would pin stale
+// modules. Fully defensive: any failure leaves the game loading straight from net.
+if (import.meta.env.PROD && typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {/* no SW → assets just load from network */});
+  });
+}
+
 const canvas = document.getElementById("game");
 // antialias:false on purpose — the DefaultRenderingPipeline renders to an offscreen HDR target and
 // resolves edges with FXAA (fx.js), so canvas MSAA is a redundant, wasted resolve every frame.

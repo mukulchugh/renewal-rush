@@ -46,6 +46,8 @@ import { ParticleSystem } from "@babylonjs/core/Particles/particleSystem";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { ImageProcessingConfiguration } from "@babylonjs/core/Materials/imageProcessingConfiguration";
 import { ColorCurves } from "@babylonjs/core/Materials/colorCurves";
+import "@babylonjs/core/Engines/Extensions/engine.query"; // side-effect: enables GPU timer queries (EXT_disjoint_timer_query)
+import { EngineInstrumentation } from "@babylonjs/core/Instrumentation/engineInstrumentation";
 
 // ── Tunables (PLAYTEST-TUNABLE — see header) ──────────────────────────────────
 const GLOW_BASE = 0.8; // baseline GlowLayer intensity (global; keep conservative)
@@ -105,6 +107,12 @@ const QUALITY_UP_FRAC = 0.94;   // fps above ceiling×this (sustained) → step 
 const QUALITY_CEIL_MIN = 55;    // clamp the learned ceiling (avoid a bad early sample)
 const QUALITY_CEIL_MAX = 250;   // …and a spurious high spike (covers 60/120/144/240 panels)
 const QUALITY_WARMUP_SEC = 2.5; // don't act until fps stabilizes + the ceiling is learned
+// GPU-time-driven thresholds (PRIMARY signal when the timer-query ext is present). The quality
+// tiers ALL trade GPU work (resolution, SSR, SSAO), so the right question is "is the GPU the
+// bottleneck?" — answered by gpuFrameMs, NOT fps (fps conflates CPU stalls). This scene is
+// CPU-bound with a near-idle GPU, so a gpu-driven controller correctly holds full quality.
+const GPU_DOWN_MS = 10.5; // sustained GPU frame time above this → GPU genuinely heavy → step down
+const GPU_UP_MS = 7.0;    // …below this (hysteresis) → GPU has headroom → restore a quality tier
 const QUALITY_EVAL_SEC = 1.5; // how long a condition must hold before acting (anti-flap)
 
 const FLASH_DECAY = 9.0; // flash opacity e-fold/sec (~0.2s fade)
@@ -243,6 +251,20 @@ export function createFx(ctx) {
   let qualityHoldSec = 0; // how long the current step condition has held
   let refreshHz = 60;     // learned achievable ceiling (running max fps at tier 0); see constants
   let qualityElapsed = 0; // total un-paused time → gates the warmup before we act
+  // CPU-bound guard state: this scene is draw-call/CPU-bound (gpuFrameMs has headroom), so a
+  // resolution/SSR downscale often does NOT raise fps — it just softens the image and the
+  // controller ratchets to the worst tier for nothing. We measure each downscale's effect and,
+  // if it didn't help, latch downscaling OFF and restore the quality we needlessly dropped.
+  let qLastDownFps = 0;   // fps captured right before the most recent downscale
+  let qDownEvalSec = -1;  // ≥0 → counting a settle window to judge whether that downscale helped
+  let qCpuLatch = false;  // true → frame is CPU-bound; stop dropping quality (releases on a real fps crater)
+  // GPU frame-time meter (PRIMARY adaptive signal). Guarded: if the timer-query extension is
+  // absent (some GPUs/drivers), gpuMs() returns -1 and the loop falls back to the fps heuristic.
+  let gpuInstr = null;
+  try { gpuInstr = new EngineInstrumentation(engine); gpuInstr.captureGPUFrameTime = true; } catch { gpuInstr = null; }
+  const gpuMs = () => {
+    try { const ns = gpuInstr && gpuInstr.gpuFrameTimeCounter.lastSecAverage; return ns > 0 ? ns / 1e6 : -1; } catch { return -1; }
+  };
   let ssaoAttached = !!ssao; // SSAO is created attached to [camera]
   const applyQualityTier = () => {
     const t = QUALITY_TIERS[qualityTier];
@@ -387,19 +409,35 @@ export function createFx(ctx) {
     if (!(state && state.paused)) {
       const fps = engine.getFps();
       qualityElapsed += dt;
-      // Learn the ceiling only at tier 0 (full quality): a higher fps after a downscale would
-      // otherwise raise the target and trigger another downscale — a runaway. getFps() is already
-      // ~1s-smoothed, so it won't spike; clamp guards a bad sample either way.
-      if (qualityTier === 0 && fps > refreshHz) refreshHz = Math.min(QUALITY_CEIL_MAX, fps);
-      refreshHz = Math.max(QUALITY_CEIL_MIN, refreshHz);
       const warm = qualityElapsed >= QUALITY_WARMUP_SEC;
-      const wantDown = warm && fps < refreshHz * QUALITY_DOWN_FRAC && qualityTier < QUALITY_TIERS.length - 1;
-      const wantUp = warm && fps > refreshHz * QUALITY_UP_FRAC && qualityTier > 0;
+      const g = gpuMs(); // GPU frame time in ms, or -1 if the timer-query ext is unavailable
+      let wantDown, wantUp;
+      if (g > 0) {
+        // PRIMARY path — GPU-time driven. Every quality tier trades GPU work (resolution/SSR/SSAO),
+        // so only the GPU's actual load should move it. A near-idle GPU (this CPU-bound scene) thus
+        // holds full quality instead of softening the image chasing a CPU-limited fps target.
+        wantDown = warm && g > GPU_DOWN_MS && qualityTier < QUALITY_TIERS.length - 1;
+        wantUp = warm && g < GPU_UP_MS && qualityTier > 0;
+      } else {
+        // FALLBACK path (no GPU timer) — fps-vs-learned-ceiling + the CPU-bound latch.
+        if (qualityTier === 0 && fps > refreshHz) refreshHz = Math.min(QUALITY_CEIL_MAX, fps);
+        refreshHz = Math.max(QUALITY_CEIL_MIN, refreshHz);
+        if (qDownEvalSec >= 0) { // judge the last downscale: no fps gain ⇒ CPU-bound ⇒ latch off + restore
+          qDownEvalSec -= dt;
+          if (qDownEvalSec < 0 && fps < qLastDownFps * 1.04 && qualityTier > 0) {
+            qCpuLatch = true; qualityTier -= 1; qualityHoldSec = 0; applyQualityTier();
+          }
+        }
+        if (qCpuLatch && fps < qLastDownFps * 0.85) qCpuLatch = false; // real new GPU load → re-enable
+        wantDown = warm && !qCpuLatch && qDownEvalSec < 0 && fps < refreshHz * QUALITY_DOWN_FRAC && qualityTier < QUALITY_TIERS.length - 1;
+        wantUp = warm && fps > refreshHz * QUALITY_UP_FRAC && qualityTier > 0;
+      }
       if (wantDown || wantUp) {
         qualityHoldSec += dt;
         if (qualityHoldSec >= QUALITY_EVAL_SEC) {
           qualityTier += wantDown ? 1 : -1;
           qualityHoldSec = 0;
+          if (wantDown) { qLastDownFps = fps; qDownEvalSec = 2.0; } // start the "did it help?" window
           applyQualityTier();
         }
       } else {

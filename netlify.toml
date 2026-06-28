@@ -5,12 +5,26 @@
   command = "bun run build"  # Netlify's build image ships bun; bun.lock triggers it
   publish = "dist"           # relative to base → game-lab/app/dist
 
-# Long-cache the hashed asset bundles; never cache the entry HTML.
+# CDN-edge caching layer. The real cross-host guarantee is the service worker
+# (public/sw.js, CacheFirst on heavy media) — these headers just help first paint
+# and edge caching ON Netlify; an equivalent vercel.json block (or none at all,
+# leaning on the SW) works the same elsewhere. Trailing /prefix/* is recursive,
+# so /assets/* covers both the hashed JS AND the nested texture dirs
+# (/assets/<set>/*.jpg). The textures + models are NOT content-hashed, so to ship
+# an updated one, rename the file (bump the SW CACHE_VERSION too) to bust caches.
 [[headers]]
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
+# Models/HDR/GLB live under /models/ (flat) and /models/cars/ (nested) — was the
+# gap: previously uncached, so sky.hdr (5 MB) + the GLBs revalidated every visit.
+[[headers]]
+  for = "/models/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Never cache the entry HTML — it points at the hashed bundle, must stay fresh.
 [[headers]]
   for = "/index.html"
   [headers.values]
