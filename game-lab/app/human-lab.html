@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Human Lab — ragdoll validation</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0b0d10; overflow: hidden; font-family: system-ui, sans-serif; }
+    #c { width: 100vw; height: 100vh; display: block; touch-action: none; }
+    #status { position: fixed; left: 12px; top: 12px; color: #cfe; background: rgba(0,0,0,.5);
+              padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="status">booting…</div>
+  <script type="module" src="/src/human-lab.js"></script>
+</body>
+</html>

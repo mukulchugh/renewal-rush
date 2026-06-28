@@ -686,6 +686,11 @@ export function createCombat(ctx) {
   // ============================================================================
   function tick(dt) {
     if (disposed) return;
+    // Third-person: the player avatar carries its own deploy-tool, so hide the camera-anchored
+    // FPS viewmodel (it would float behind the avatar). state.playerPos is only set in TPS.
+    // World-space tracers still render (their origin is computed from the camera basis, not root).
+    const tps = !!(ctx.state && ctx.state.playerPos);
+    if (root.isEnabled() === tps) root.setEnabled(!tps);
     // dedupe in case the caller also calls api.update() in the same frame
     const rid = scene.getRenderId ? scene.getRenderId() : 0;
     if (rid === _lastRid && rid !== 0) return;

@@ -1,5 +1,17 @@
-// controller.js — advanced, weighty free-movement FPS controller for Renewal Rush.
-// Replaces the old 3-lane rail + look-clamp with a full 6-DOF first-person feel:
+// controller.js — advanced, weighty free-movement THIRD-PERSON controller for Renewal Rush.
+// (Converted from first-person to an over-the-shoulder / Max-Payne TPS so the player SEES
+// their Quivly-agent avatar — which makes the SHOOTDODGE dive readable: you watch yourself
+// leap, tuck/roll in slow-mo, and get up on landing. The movement + dive PHYSICS are the
+// same crown-jewel sim as before — only the camera placement + a visible avatar are added
+// on top, plus a per-frame write of the avatar position to ctx.state.playerPos so enemies
+// aim at the CHARACTER, not the camera behind it.)
+//
+// AIM SEAM (do not break): combat.js raycasts via camera.getForwardRay (origin = camera,
+// dir = camera FORWARD = where the center crosshair points). We keep writing camera.rotation
+// (yaw/pitch/roll) exactly as before, so the camera-forward ray still maps to the reticle.
+// Only camera.POSITION changes (pushed behind + above the avatar, with wall collision).
+//
+// The original 6-DOF first-person feel is intact underneath:
 // WASD relative to camera yaw, unclamped 360 mouse-look (pitch clamped ~±85°),
 // momentum + air control, sprint, crouch, a sprint→crouch SLIDE that glides on
 // low friction, gravity jump (coyote + buffer), dash (cooldown + i-frames),
@@ -32,10 +44,18 @@
 //   impulse (skipped during i-frames, matching main.js's damage gate).
 //   "kill" -> +focus (the dive fuel fills from neutralizes).
 //
-// No new Babylon imports: every mechanic here is scalar math on the existing
-// velocity / position / camera that main.js already created.
+// Babylon imports (all on the ARCHITECTURE verified-import list): Vector3 for the existing
+// scalar sim, plus the meshing/material/transform/ray modules the TPS layer needs to build
+// the visible avatar and do camera-vs-building collision. The movement math is still pure
+// scalar work on the existing velocity / position the controller owns.
 
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Color3 } from "@babylonjs/core/Maths/math.color";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
+import { Ray } from "@babylonjs/core/Culling/ray";
+import { PhysicsCharacterController, CharacterSupportedState } from "@babylonjs/core/Physics/v2/characterController"; // C3: used only when ctx.useHavok
 
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
@@ -138,6 +158,27 @@ export function createController(ctx) {
       fovDash: 0.1, // punchy kick on dash
       fovRecover: 6, // dash-kick decay
       fovRate: 7, // how fast fov chases its target
+      // ---- THIRD-PERSON follow camera (over-the-shoulder) -----------------------
+      camDist: 4.6, // base distance the camera sits BEHIND the aim/player along -forward
+      camHeight: 0.55, // world-up lift of the orbit pivot above the player's head
+      camSide: 0.85, // over-the-shoulder lateral offset (to the camera's right)
+      camPivotUp: 0.15, // pivot raised this far above the eye line (frame around the head)
+      camPitchMin: -42 * DEG, // look UP limit (camera swings low/behind — keep modest)
+      camPitchMax: 62 * DEG, // look DOWN limit (camera swings high/overhead)
+      camCollPad: 0.34, // pull the camera this far off a wall it would clip into
+      camFloor: 0.45, // hard minimum camera height above the player's feet (never sink underground)
+      // dive showcase: ease the shot wider + more centered so the leap/roll reads cinematically
+      camDiveDist: 2.6, // EXTRA distance pulled out during a shootdodge (cinematic framing)
+      camDiveSide: -0.55, // pull the shoulder offset toward center during the dive
+      camDiveRate: 7, // how fast the dive framing eases in (air) / out (land), REAL-time
+      // visible avatar (the Quivly agent) — emerald/forest brand, distinct from red enemies
+      avBright: "#2BD98A", // brand emerald (suit accents / core)
+      avDark: "#11432E", // brand forest (torso / limbs)
+      avWalkSwing: 0.85, // peak hip/shoulder swing (radians) at full speed
+      avFaceRate: 12, // how fast the avatar yaw eases toward the aim/move direction
+      avProneAngle: 78 * DEG, // body pitch toward horizontal during a dive (superman/prone)
+      avProneRate: 11, // how fast the body tucks into / out of the prone dive pose (REAL-time)
+      avRollSpin: 1.1 * Math.PI, // peak barrel-roll (radians) the body tumbles through a dive
       // stability
       maxDt: 0.05, // clamp dt so tab-refocus can't fling the player
     },
@@ -227,6 +268,145 @@ export function createController(ctx) {
   const look = { dx: 0, dy: 0 };
 
   let disposed = false;
+
+  // ---- THIRD-PERSON: avatar + follow-camera state ----------------------------
+  // EYE = the resting eye height the FPS camera spawned at; the avatar's FEET sit EYE below
+  // the integrated eye position _pos (so feet rest on the ground at y≈0, and rise with jumps
+  // and the dive arc). AV_CHEST = body-center height we publish as ctx.state.playerPos so
+  // enemies aim at the character's torso through the whole jump/dive arc.
+  const EYE = spawnPos.y || 1.7;
+  const AV_CHEST = 1.2;
+  const HIP = 0.9; // the body-pivot height — the dive prone-tilt + roll rotate about the hips
+
+  let avatarYaw = spawnYaw; // eased body facing (aim dir standing, move dir running, dive dir mid-leap)
+  let gaitPhase = 0; // walk-cycle phase (drives limb swing)
+  let proneT = 0; // 0..1 eased "how prone" the body is during a shootdodge (the leap/roll/get-up)
+  let diveRollSign = 0; // which way the body barrel-rolls through a dive (set on launch)
+  let camDistE = CFG.camDist; // eased camera distance (pulls wider during a dive)
+  let camSideE = CFG.camSide; // eased over-the-shoulder offset (centers during a dive)
+
+  // Camera-vs-world collision: pull the camera in if a BUILDING/WALL is between it and the
+  // player. Only world geometry occludes (named by world.js) — never the avatar (isPickable
+  // false anyway) or the pickable enemy capsules, which must not yank the camera around.
+  const camOccPred = (m) => {
+    const n = m && m.name;
+    return !!n && (n.indexOf("world_hq_") === 0 || n.indexOf("world_wall_") === 0);
+  };
+  const _camRay = new Ray(new Vector3(0, 0, 0), new Vector3(0, 0, 1), 1);
+  const _camDir = new Vector3(0, 0, 1);
+
+  // Build the visible Quivly-agent avatar (low-poly humanoid, emerald/forest brand) parented
+  // to a player-root TransformNode this module owns. Limbs hang off shoulder/hip pivot nodes
+  // so they can swing for a walk cycle and tuck for the dive. EVERYTHING is isPickable=false
+  // so the player's own combat raycast (camera.getForwardRay) can never hit their own body.
+  const avatarMats = [];
+  let avatar = null;
+  function buildAvatar() {
+    const dark = new StandardMaterial("rr_player_dark", scene);
+    dark.diffuseColor = Color3.FromHexString(CFG.avDark);
+    dark.specularColor = new Color3(0.12, 0.16, 0.13);
+    const lite = new StandardMaterial("rr_player_lite", scene);
+    lite.diffuseColor = Color3.FromHexString(CFG.avBright).scale(0.45);
+    lite.emissiveColor = Color3.FromHexString(CFG.avBright).scale(0.7);
+    lite.specularColor = new Color3(0.2, 0.3, 0.25);
+    avatarMats.push(dark, lite);
+
+    const root = new TransformNode("rr_player_root", scene);
+    const pivot = new TransformNode("rr_player_body", scene);
+    pivot.parent = root;
+    pivot.position.set(0, HIP, 0); // rotate the body about the hips for the dive
+
+    // mk: place a mesh at WORLD rest-height wy → local under the hip pivot (wy - HIP).
+    const mk = (mesh, mat, x, wy, z, parent) => {
+      mesh.material = mat;
+      mesh.isPickable = false;
+      mesh.parent = parent || pivot;
+      mesh.position.set(x, wy - HIP, z);
+      return mesh;
+    };
+
+    const torso = MeshBuilder.CreateBox("rr_p_torso", { width: 0.42, height: 0.62, depth: 0.26 }, scene);
+    mk(torso, dark, 0, 1.2, 0);
+    const pelvis = MeshBuilder.CreateBox("rr_p_pelvis", { width: 0.34, height: 0.2, depth: 0.24 }, scene);
+    mk(pelvis, dark, 0, 0.92, 0);
+    const core = MeshBuilder.CreateBox("rr_p_core", { width: 0.16, height: 0.16, depth: 0.05 }, scene);
+    mk(core, lite, 0, 1.3, 0.14); // emerald chest core = the Quivly agent badge
+    const head = MeshBuilder.CreateSphere("rr_p_head", { diameter: 0.34, segments: 8 }, scene);
+    mk(head, dark, 0, 1.62, 0);
+    const visor = MeshBuilder.CreateBox("rr_p_visor", { width: 0.24, height: 0.07, depth: 0.04 }, scene);
+    mk(visor, lite, 0, 1.64, 0.16); // glowing agent visor
+
+    const shL = new TransformNode("rr_p_shL", scene); shL.parent = pivot; shL.position.set(-0.28, 1.42 - HIP, 0);
+    const shR = new TransformNode("rr_p_shR", scene); shR.parent = pivot; shR.position.set(0.28, 1.42 - HIP, 0);
+    const hipL = new TransformNode("rr_p_hipL", scene); hipL.parent = pivot; hipL.position.set(-0.12, 0.9 - HIP, 0);
+    const hipR = new TransformNode("rr_p_hipR", scene); hipR.parent = pivot; hipR.position.set(0.12, 0.9 - HIP, 0);
+
+    const armL = MeshBuilder.CreateCapsule("rr_p_armL", { radius: 0.08, height: 0.6, tessellation: 6, capSubdivisions: 2 }, scene);
+    armL.material = dark; armL.isPickable = false; armL.parent = shL; armL.position.set(0, -0.3, 0);
+    const armR = MeshBuilder.CreateCapsule("rr_p_armR", { radius: 0.08, height: 0.6, tessellation: 6, capSubdivisions: 2 }, scene);
+    armR.material = dark; armR.isPickable = false; armR.parent = shR; armR.position.set(0, -0.3, 0);
+    const legL = MeshBuilder.CreateCapsule("rr_p_legL", { radius: 0.1, height: 0.85, tessellation: 6, capSubdivisions: 2 }, scene);
+    legL.material = dark; legL.isPickable = false; legL.parent = hipL; legL.position.set(0, -0.42, 0);
+    const legR = MeshBuilder.CreateCapsule("rr_p_legR", { radius: 0.1, height: 0.85, tessellation: 6, capSubdivisions: 2 }, scene);
+    legR.material = dark; legR.isPickable = false; legR.parent = hipR; legR.position.set(0, -0.42, 0);
+
+    // Agent deployer in the right hand — points forward when the arm raises (dive/aim).
+    const gun = MeshBuilder.CreateBox("rr_p_gun", { width: 0.07, height: 0.07, depth: 0.34 }, scene);
+    gun.material = lite; gun.isPickable = false; gun.parent = armR; gun.position.set(0.04, -0.5, 0.16);
+
+    root.position.set(spawnPos.x, spawnPos.y - EYE, spawnPos.z);
+    root.rotation.y = spawnYaw;
+    avatar = { root, pivot, shL, shR, hipL, hipR, armL, armR, legL, legR };
+  }
+  buildAvatar();
+
+  // ── C3: Havok PhysicsCharacterController as a COLLISION RESOLVER (flag-gated) ──
+  // PCC does NOT replace our movement math — every accel/friction/dash/dive/jump
+  // computation below still produces `vel`/`diveVel`. PCC only resolves that velocity
+  // against world geometry (collide-and-slide, slope/stair step-up) and tells us if we're
+  // grounded. We own gravity (in vel.y / diveVel.y), so we pass ZERO gravity to integrate().
+  // Verified headless (test/physics.test.js): PCC.integrate advances from setVelocity, and
+  // its reference point settles ~PCC_REF_OFFSET above the feet on flat ground.
+  // SCAFFOLDED — the eye↔capsule mapping and feel need the GPU playtest to tune.
+  const PCC_H = (CFG.pccCapsuleHeight ?? 1.8);
+  const PCC_R = (CFG.pccCapsuleRadius ?? 0.6);
+  const PCC_REF_OFFSET = (CFG.pccRefOffset ?? 1.025); // ref-point height above feet, flat ground
+  const DOWN = new Vector3(0, -1, 0);
+  const V3_ZERO = Vector3.Zero();
+  const _pccVel = new Vector3(0, 0, 0);
+  let pcc = null;
+  let pccGrounded = true;     // last frame's support (movement logic reads this)
+  let wasPccGrounded = true;  // edge-detect for landing FX
+  // eye y = feetY + EYE; PCC ref y = feetY + PCC_REF_OFFSET  →  refY = eyeY - EYE + PCC_REF_OFFSET
+  const eyeToRefY = (eyeY) => eyeY - EYE + PCC_REF_OFFSET;
+  const refToEyeY = (refY) => refY - PCC_REF_OFFSET + EYE;
+  if (ctx.useHavok && scene.getPhysicsEngine && scene.getPhysicsEngine()) {
+    try {
+      pcc = new PhysicsCharacterController(
+        new Vector3(_pos.x, eyeToRefY(_pos.y), _pos.z),
+        { capsuleHeight: PCC_H, capsuleRadius: PCC_R }, scene
+      );
+    } catch (e) { console.error("PCC init failed — using direct integration", e); pcc = null; }
+  }
+
+  // Commit a velocity through the PCC for `stepDt` seconds, writing the resolved eye position
+  // into _pos and refreshing pccGrounded. Returns the grounded state. (Havok path only.)
+  function pccCommit(vx, vy, vz, stepDt) {
+    const support = pcc.checkSupport(stepDt, DOWN);
+    _pccVel.set(vx, vy, vz);
+    pcc.setVelocity(_pccVel);
+    pcc.integrate(stepDt, support, V3_ZERO); // ZERO gravity: we own vy
+    const np = pcc.getPosition();
+    _pos.x = np.x; _pos.y = refToEyeY(np.y); _pos.z = np.z;
+    pccGrounded = support.supportedState === CharacterSupportedState.SUPPORTED;
+    return pccGrounded;
+  }
+
+  // Publish the avatar's torso world-position so enemies aim at the CHARACTER (not the camera).
+  // Initialized to a real value (a zero Vector3 would be truthy and defeat enemies' fallback).
+  if (state && !state.playerPos) {
+    state.playerPos = new Vector3(spawnPos.x, spawnPos.y - EYE + AV_CHEST, spawnPos.z);
+  }
 
   const down = (list) => {
     for (let i = 0; i < list.length; i++) if (pressed.has(list[i])) return true;
@@ -359,8 +539,10 @@ export function createController(ctx) {
     look.dx = look.dy = 0;
     if (yaw > Math.PI) yaw -= TAU;
     else if (yaw < -Math.PI) yaw += TAU;
-    if (pitch > CFG.pitchLimit) pitch = CFG.pitchLimit;
-    else if (pitch < -CFG.pitchLimit) pitch = -CFG.pitchLimit;
+    // TPS pitch clamp: tighter + asymmetric so the orbit camera never swings under the road
+    // (look-up) or straight overhead (look-down). Still wide enough to aim across the arena.
+    if (pitch > CFG.camPitchMax) pitch = CFG.camPitchMax;
+    else if (pitch < CFG.camPitchMin) pitch = CFG.camPitchMin;
 
     // horizontal basis from yaw (Babylon left-handed: fwd=(sin,0,cos), right=(cos,0,-sin))
     const sy = Math.sin(yaw);
@@ -383,7 +565,8 @@ export function createController(ctx) {
       dz /= dlen;
     }
 
-    const grounded = _pos.y <= baseY + 1e-3 && vel.y <= 1e-3;
+    // Havok: last frame's PCC support (works on slopes/stairs). Flat path: the baseY test.
+    const grounded = pcc ? pccGrounded : (_pos.y <= baseY + 1e-3 && vel.y <= 1e-3);
 
     // landing-recovery timer burns in REAL time (it spans the slow-mo tail)
     if (recover > 0) recover = Math.max(0, recover - rdt);
@@ -497,19 +680,26 @@ export function createController(ctx) {
       // while the world crawls. No ground steering — the leap is committed (DESIGN §0b).
       diveTime += rdt;
       diveVel.y -= CFG.diveGravity * rdt;
-      _pos.x += diveVel.x * rdt;
-      _pos.y += diveVel.y * rdt;
-      _pos.z += diveVel.z * rdt;
-      // end on the descent back to ground (or the safety cap)
-      if ((_pos.y <= baseY && diveVel.y <= 0) || diveTime >= CFG.diveMaxTime) {
-        _pos.y = baseY;
-        endDive();
+      if (pcc) {
+        // Dive runs at REAL dt through the PCC so it collides/slides at full speed while the
+        // world crawls. End when we land again (supported, descending) or the safety cap.
+        const g = pccCommit(diveVel.x, diveVel.y, diveVel.z, rdt);
+        if ((g && diveVel.y <= 0) || diveTime >= CFG.diveMaxTime) endDive();
+      } else {
+        _pos.x += diveVel.x * rdt;
+        _pos.y += diveVel.y * rdt;
+        _pos.z += diveVel.z * rdt;
+        // end on the descent back to ground (or the safety cap)
+        if ((_pos.y <= baseY && diveVel.y <= 0) || diveTime >= CFG.diveMaxTime) {
+          _pos.y = baseY;
+          endDive();
+        }
       }
     } else if (dashing) {
       // clean horizontal blink: constant velocity, no gravity, frozen height
       dashTimer -= dt;
-      _pos.x += vel.x * dt;
-      _pos.z += vel.z * dt;
+      if (pcc) pccCommit(vel.x, 0, vel.z, dt); // y=0: PCC keeps height; collides with walls
+      else { _pos.x += vel.x * dt; _pos.z += vel.z * dt; }
     } else {
       const hspeed = Math.hypot(vel.x, vel.z);
 
@@ -622,19 +812,34 @@ export function createController(ctx) {
 
       // gravity + integrate
       vel.y -= CFG.gravity * dt;
-      _pos.x += vel.x * dt;
-      _pos.y += vel.y * dt;
-      _pos.z += vel.z * dt;
+      if (pcc) {
+        const impact = -vel.y; // >0 when descending
+        const g = pccCommit(vel.x, vel.y, vel.z, dt);
+        // Landing: just became supported while descending → the thud/dip/kick.
+        if (g) {
+          vel.y = 0;
+          if (!wasPccGrounded && impact > 0.5) {
+            dip = Math.min(impact * CFG.dipScale, CFG.dipMax);
+            landKick = Math.min(impact * CFG.landPitch, CFG.landPitchMax);
+            bus && bus.emit && bus.emit("land", { impact });
+          }
+        }
+        wasPccGrounded = g;
+      } else {
+        _pos.x += vel.x * dt;
+        _pos.y += vel.y * dt;
+        _pos.z += vel.z * dt;
 
-      // ground collision
-      if (_pos.y <= baseY) {
-        const impact = -vel.y; // >0 when falling onto the floor
-        _pos.y = baseY;
-        vel.y = 0;
-        if (impact > 0.5) {
-          dip = Math.min(impact * CFG.dipScale, CFG.dipMax);
-          landKick = Math.min(impact * CFG.landPitch, CFG.landPitchMax);
-          bus && bus.emit && bus.emit("land", { impact });
+        // ground collision
+        if (_pos.y <= baseY) {
+          const impact = -vel.y; // >0 when falling onto the floor
+          _pos.y = baseY;
+          vel.y = 0;
+          if (impact > 0.5) {
+            dip = Math.min(impact * CFG.dipScale, CFG.dipMax);
+            landKick = Math.min(impact * CFG.landPitch, CFG.landPitchMax);
+            bus && bus.emit && bus.emit("land", { impact });
+          }
         }
       }
     }
@@ -649,7 +854,7 @@ export function createController(ctx) {
     // ---- camera feel ----
     _speed = Math.hypot(vel.x, vel.z);
     const speedFactor = Math.min(_speed / CFG.sprintSpeed, 1);
-    const groundedNow = _pos.y <= baseY + 1e-3;
+    const groundedNow = pcc ? pccGrounded : _pos.y <= baseY + 1e-3;
 
     let bobY = 0;
     let bobX = 0;
@@ -685,19 +890,103 @@ export function createController(ctx) {
       baseFov + rush * CFG.fovBoost + speedFactor * CFG.fovSpeed + fovKick;
     camera.fov += (fovTarget - camera.fov) * (1 - Math.exp(-CFG.fovRate * dt));
 
-    // ---- APPLY (fx.shake, if present, layers on top after this in main's order) ----
+    // ---- APPLY ----------------------------------------------------------------
+    // ROTATION drives AIM: combat.js reads camera.getForwardRay, so camera-forward = where the
+    // center crosshair points. We keep writing rotation EXACTLY as the FPS build did (roll on .z
+    // is cosmetic — it doesn't change forward), so the aim seam is untouched. Only the camera
+    // POSITION becomes the third-person over-the-shoulder rig below. (fx.shake layers on after.)
     if (camera.rotation) {
       camera.rotation.x = pitch + landKick + hurtPitch;
       camera.rotation.y = yaw;
       camera.rotation.z = roll + hurtRoll + diveLean;
     }
-    camera.position.set(
-      _pos.x + rX * bobX,
-      _pos.y + bobY - dip + heightOffset,
-      _pos.z + rZ * bobX
-    );
+
+    // dive framing + body prone: ease in REAL time (rdt) so the shot opens up + the body tucks
+    // at full speed even while the WORLD is in slow-mo — the same decoupling as look + the arc.
+    const camEase = 1 - Math.exp(-CFG.camDiveRate * rdt);
+    camDistE += (CFG.camDist + (diving ? CFG.camDiveDist : 0) - camDistE) * camEase;
+    camSideE += (CFG.camSide + (diving ? CFG.camDiveSide : 0) - camSideE) * camEase;
+    proneT += ((diving ? 1 : 0) - proneT) * (1 - Math.exp(-CFG.avProneRate * rdt));
+
+    // camera-forward from yaw+pitch (Babylon: fwd = (sinY·cosP, -sinP, cosY·cosP)).
+    const cp = Math.cos(pitch), spch = Math.sin(pitch);
+    const fwdX = sy * cp, fwdY = -spch, fwdZ = cy * cp;
+
+    // orbit pivot = the player's head, lifted + offset over the shoulder (camera-right = rX,rZ),
+    // then the camera sits BEHIND it along -forward. Recomputed every frame from _pos with NO
+    // positional smoothing, so the camera faithfully tracks the ballistic dive arc.
+    const pivX = _pos.x + rX * camSideE;
+    const pivY = _pos.y + CFG.camPivotUp + CFG.camHeight;
+    const pivZ = _pos.z + rZ * camSideE;
+    let camX = pivX - fwdX * camDistE;
+    let camY = pivY - fwdY * camDistE;
+    let camZ = pivZ - fwdZ * camDistE;
+
+    // collision: if a building/wall sits between the pivot and the camera, pull the camera in.
+    const toX = camX - pivX, toY = camY - pivY, toZ = camZ - pivZ;
+    const camLen = Math.hypot(toX, toY, toZ);
+    if (camLen > 1e-3 && scene && scene.pickWithRay) {
+      _camDir.set(toX / camLen, toY / camLen, toZ / camLen);
+      _camRay.origin.set(pivX, pivY, pivZ);
+      _camRay.direction.copyFrom(_camDir);
+      _camRay.length = camLen;
+      const pick = scene.pickWithRay(_camRay, camOccPred);
+      if (pick && pick.hit && pick.distance < camLen) {
+        const d = Math.max(0, pick.distance - CFG.camCollPad);
+        camX = pivX + _camDir.x * d;
+        camY = pivY + _camDir.y * d;
+        camZ = pivZ + _camDir.z * d;
+      }
+    }
+    // hard Y floor — the road (world_ground) isn't an occluder, so guarantee the camera never
+    // sinks below the player's feet when pitching up (this is the robust net the predicate misses).
+    const feetY = _pos.y - EYE;
+    if (camY < feetY + CFG.camFloor) camY = feetY + CFG.camFloor;
+    camera.position.set(camX, camY, camZ);
+
+    // place + face + walk-cycle + dive-pose the visible avatar, then publish its torso position.
+    poseAvatar(dt, rdt);
+    if (state && state.playerPos) state.playerPos.set(_pos.x, feetY + AV_CHEST, _pos.z);
 
     wasCrouch = crouchHeld; // edge-detect for next frame's slide trigger
+  }
+
+  // ---- avatar pose: place, face, walk-cycle, and the shootdodge leap/roll/get-up ----------
+  function poseAvatar(dt, rdt) {
+    if (!avatar) return;
+    const feetY = _pos.y - EYE;
+    avatar.root.position.set(_pos.x, feetY, _pos.z);
+
+    // facing: the DIVE direction while leaping (so the leap reads), the MOVE direction while
+    // running, else the AIM yaw when ~still. Eased in REAL time mid-dive so it snaps to the leap.
+    let faceYaw;
+    if (diving) {
+      faceYaw = Math.atan2(diveVel.x, diveVel.z);
+    } else {
+      const sp = Math.hypot(vel.x, vel.z);
+      faceYaw = sp > 1.5 ? Math.atan2(vel.x, vel.z) : yaw;
+    }
+    let dyaw = faceYaw - avatarYaw;
+    while (dyaw > Math.PI) dyaw -= TAU;
+    while (dyaw < -Math.PI) dyaw += TAU;
+    avatarYaw += dyaw * (1 - Math.exp(-CFG.avFaceRate * (diving ? rdt : dt)));
+    avatar.root.rotation.y = avatarYaw;
+
+    // body: tuck toward horizontal (prone) + barrel-roll through the dive; unwinds on the get-up.
+    avatar.pivot.rotation.x = proneT * CFG.avProneAngle;
+    avatar.pivot.rotation.z = diveRollSign * proneT * CFG.avRollSpin;
+
+    // limbs: walk swing blended toward a dive tuck (arms forward = superman, legs trailing back).
+    const moveSp = Math.hypot(vel.x, vel.z);
+    const grounded = _pos.y <= baseY + 1e-3;
+    if (grounded && !diving) gaitPhase += moveSp * dt * 1.5;
+    const speedF = Math.min(moveSp / CFG.sprintSpeed, 1);
+    const swing = Math.sin(gaitPhase) * CFG.avWalkSwing * speedF;
+    const t = proneT;
+    avatar.legL.rotation.x = swing + (0.55 - swing) * t;
+    avatar.legR.rotation.x = -swing + (0.45 + swing) * t;
+    avatar.armL.rotation.x = -swing + (-1.3 + swing) * t;
+    avatar.armR.rotation.x = swing + (-1.3 - swing) * t;
   }
 
   // ---- shootdodge dive ----
@@ -737,6 +1026,7 @@ export function createController(ctx) {
     fovKick = Math.max(fovKick, CFG.diveFovKick);
     const rdot = qx * rX + qz * rZ; // dive component along camera-right
     diveLeanTarget = -Math.sign(rdot || 0) * CFG.diveRoll;
+    diveRollSign = Math.sign(rdot || 0) || 1; // which way the AVATAR body barrel-rolls mid-leap
 
     // decoupled slow-mo: world crawls for the airtime + a tail covering the recovery.
     const airtime = (2 * CFG.diveLaunchUp) / CFG.diveGravity;
@@ -786,6 +1076,10 @@ export function createController(ctx) {
   function reset() {
     _pos.copyFrom(spawnPos);
     baseY = spawnPos.y;
+    if (pcc) { // re-home the physics capsule too (else it keeps its old world position)
+      try { pcc.setPosition(new Vector3(spawnPos.x, eyeToRefY(spawnPos.y), spawnPos.z)); pcc.setVelocity(V3_ZERO); } catch { /* noop */ }
+      pccGrounded = wasPccGrounded = true;
+    }
     vel.set(0, 0, 0);
     yaw = spawnYaw;
     pitch = 0;
@@ -810,6 +1104,25 @@ export function createController(ctx) {
     look.dx = look.dy = 0;
     pressed.clear();
     camera.fov = baseFov;
+    // TPS: re-home the avatar + follow-camera state, and re-publish the player position.
+    avatarYaw = spawnYaw;
+    gaitPhase = 0;
+    proneT = 0;
+    diveRollSign = 0;
+    camDistE = CFG.camDist;
+    camSideE = CFG.camSide;
+    if (avatar) {
+      avatar.root.position.set(spawnPos.x, spawnPos.y - EYE, spawnPos.z);
+      avatar.root.rotation.set(0, spawnYaw, 0);
+      avatar.pivot.rotation.set(0, 0, 0);
+      avatar.legL.rotation.set(0, 0, 0);
+      avatar.legR.rotation.set(0, 0, 0);
+      avatar.armL.rotation.set(0, 0, 0);
+      avatar.armR.rotation.set(0, 0, 0);
+    }
+    if (state && state.playerPos) {
+      state.playerPos.set(spawnPos.x, spawnPos.y - EYE + AV_CHEST, spawnPos.z);
+    }
     if (state) {
       state.invuln = false;
       state.dashing = false;
@@ -857,6 +1170,13 @@ export function createController(ctx) {
       state.crouching = false;
     }
     camera.fov = baseFov;
+    // tear down the avatar (disposes the whole TransformNode tree) + its own materials.
+    if (avatar) {
+      try { avatar.root.dispose(false, false); } catch (_) {}
+      avatar = null;
+    }
+    for (const m of avatarMats) { try { m.dispose(); } catch (_) {} }
+    avatarMats.length = 0;
   }
 
   return {

@@ -682,6 +682,7 @@ export function createMeta(ctx = {}) {
 
   // External pick path (e.g. a HUD-rendered picker) routes through the same apply-once code.
   on("draftPick", (e) => { applyPick(e); });
+  on("draft:pick", (e) => { applyPick(e); }); // HUD draft card emits this name (id/index payload)
 
   // Track Full-Stack catches (for the summary + Auto-Renew) and Focus-window catches.
   on("kill", (e = {}) => {

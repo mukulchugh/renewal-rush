@@ -5,7 +5,7 @@
 //      READABLE branded "signal card": a high-res DynamicTexture (640×800) showing the
 //      source (CRM/Gong/Stripe/Zendesk/Slack/Market) + glyph, a RISK badge colored by
 //      score bucket (low→critical), the account, ARR, sentiment (1–5), and source chips
-//      (Full-Stack moat flag for multi-source). Premium dark-glass, indigo accent,
+//      (Full-Stack moat flag for multi-source). Premium dark-glass, forest-emerald accent,
 //      emissive tier edge so it pops under the GlowLayer. Returns the plane mesh; the
 //      caller (enemies.js) owns mesh.metadata — we only stamp a non-conflicting handle.
 //   2) showResult(result) — on bus "win"/"lose" (or called directly), renders a sharp
@@ -24,22 +24,25 @@ import { Color3 } from "@babylonjs/core/Maths/math.color";
 
 // ── Brand palette ─────────────────────────────────────────────────────────────
 const C = {
-  indigo: "#6366F1",
-  indigoSoft: "#a5b4fc",
-  indigoDeep: "#4F46E5",
-  bg: "#0A0A0A",
-  panelTop: "#10101C",
-  panelMid: "#0B0B14",
-  panelBot: "#06060A",
-  text: "#F1F2F7",
-  muted: "#9AA0B4",
-  hair: "rgba(255,255,255,0.10)",
+  // Quivly forest green. `emerald` is the single brand accent (glow / CTA / win),
+  // `forest`/`deep` carry fills, buttons, and borders.
+  emerald: "#2BD98A",
+  emeraldSoft: "#7CF0BE",
+  forest: "#11432E",
+  deep: "#0B3322",
+  bg: "#06100B",
+  panelTop: "#0F2419",
+  panelMid: "#0B1A12",
+  panelBot: "#07120C",
+  text: "#EAF6EF",
+  muted: "#8FA89B",
+  hair: "rgba(234,246,239,0.10)",
 };
 
 const FONT = "Inter, 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif";
 
 // Per-source identity: real Quivly integration accent + the signal channel it owns.
-// (Mirrors QUIVLY-GROUNDING.md's signal-source table; indigo-anchored, varied accents.)
+// (Mirrors QUIVLY-GROUNDING.md's signal-source table; per-integration brand accents.)
 export const SIGNAL_META = {
   CRM: { color: "#6366F1", channel: "Pipeline · Salesforce" },
   Gong: { color: "#22D3EE", channel: "Call signal · Gong" },
@@ -360,15 +363,15 @@ function drawChipRow(g, W, y, sources) {
   if (full) {
     const w = fullW - gap;
     roundRect(g, x, y - chipH / 2, w, chipH, chipH / 2);
-    g.fillStyle = hexToRgba(C.indigo, 0.18);
+    g.fillStyle = hexToRgba(C.emerald, 0.18);
     g.fill();
     g.lineWidth = 1.5;
-    g.strokeStyle = hexToRgba(C.indigo, 0.85);
-    g.shadowColor = C.indigo;
+    g.strokeStyle = hexToRgba(C.emerald, 0.85);
+    g.shadowColor = C.emerald;
     g.shadowBlur = 12;
     g.stroke();
     g.shadowBlur = 0;
-    g.fillStyle = C.indigoSoft;
+    g.fillStyle = C.emeraldSoft;
     g.font = `800 16px ${FONT}`;
     g.textAlign = "center";
     g.textBaseline = "middle";
@@ -449,9 +452,9 @@ function drawSignalCard(g, W, H, info) {
   g.stroke();
   g.restore();
 
-  // Inner indigo hairline for brand depth.
+  // Inner emerald hairline for brand depth.
   g.lineWidth = 1.5;
-  g.strokeStyle = hexToRgba(C.indigo, 0.28);
+  g.strokeStyle = hexToRgba(C.emerald, 0.28);
   roundRect(g, pad + 14, pad + 14, cw - 28, ch - 28, 24);
   g.stroke();
 
@@ -468,7 +471,7 @@ function drawSignalCard(g, W, H, info) {
   g.fillText(meta.channel, pad + 84, hy + 18);
 
   // Quivly watermark
-  g.fillStyle = C.indigo;
+  g.fillStyle = C.emerald;
   roundRect(g, W - pad - 116, hy - 9, 18, 18, 5);
   g.fill();
   g.fillStyle = hexToRgba("#FFFFFF", 0.62);
@@ -540,6 +543,9 @@ function drawSignalCard(g, W, H, info) {
 }
 
 // ── Result card (shareable, HD) ─────────────────────────────────────────────────
+// Refined red for the LOST state — confident, not neon.
+const LOST_RED = "#E5565A";
+
 function drawResultCard(canvas, r) {
   const dpr = Math.min((typeof window !== "undefined" && window.devicePixelRatio) || 1, 2);
   const W = 1200;
@@ -551,82 +557,114 @@ function drawResultCard(canvas, r) {
   g.clearRect(0, 0, W, H);
 
   const won = !!r.won;
-  const accent = won ? "#34D399" : "#F87171";
+  const accent = won ? C.emerald : LOST_RED;
   const rk = rankFor(r.arr);
+  const pad = 80;
 
-  // Background.
+  // Premium card background — refined forest-dark, subtle diagonal gradient.
   const bg = g.createLinearGradient(0, 0, W, H);
-  bg.addColorStop(0, "#07070B");
-  bg.addColorStop(1, "#0C0C18");
+  bg.addColorStop(0, C.panelBot);
+  bg.addColorStop(0.55, C.panelMid);
+  bg.addColorStop(1, "#091610");
   g.fillStyle = bg;
   g.fillRect(0, 0, W, H);
-  const glow = g.createRadialGradient(W * 0.82, H * 0.16, 40, W * 0.82, H * 0.16, 660);
-  glow.addColorStop(0, hexToRgba(won ? C.indigo : "#F87171", 0.22));
-  glow.addColorStop(1, hexToRgba(C.indigo, 0));
+
+  // One soft accent glow in the upper-right — quiet, not a bloom.
+  const glow = g.createRadialGradient(W * 0.88, -40, 40, W * 0.88, -40, 720);
+  glow.addColorStop(0, hexToRgba(accent, won ? 0.16 : 0.13));
+  glow.addColorStop(1, hexToRgba(accent, 0));
   g.fillStyle = glow;
   g.fillRect(0, 0, W, H);
 
-  // Faint grid.
-  g.strokeStyle = hexToRgba("#FFFFFF", 0.03);
-  g.lineWidth = 1;
-  for (let x = 0; x <= W; x += 60) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
-  for (let y = 0; y <= H; y += 60) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
-
-  // Inner neon frame.
+  // Subtle 1px inner border for the standalone exported image.
   g.save();
-  g.strokeStyle = hexToRgba(C.indigo, 0.35);
-  g.lineWidth = 2;
-  roundRect(g, 24, 24, W - 48, H - 48, 22);
+  g.strokeStyle = hexToRgba(C.emerald, 0.16);
+  g.lineWidth = 1;
+  roundRect(g, 16.5, 16.5, W - 33, H - 33, 26);
   g.stroke();
   g.restore();
 
-  const pad = 72;
-
-  // Brand row.
-  g.fillStyle = C.indigo;
-  roundRect(g, pad, 58, 22, 22, 6);
+  // ── Brand row ────────────────────────────────────────────────────────────────
+  const brandY = 78;
+  g.fillStyle = C.emerald;
+  roundRect(g, pad, brandY - 11, 22, 22, 6);
   g.fill();
   g.textBaseline = "middle";
   g.textAlign = "left";
   g.fillStyle = C.text;
-  g.font = `800 26px ${FONT}`;
-  g.fillText("QUIVLY", pad + 34, 70);
+  g.font = `800 24px ${FONT}`;
+  g.fillText("Quivly", pad + 34, brandY + 1);
+  const qW = g.measureText("Quivly").width;
   g.fillStyle = C.muted;
-  g.font = `600 18px ${FONT}`;
-  g.fillText("RENEWAL RUSH", pad + 144, 71);
+  g.font = `600 15px ${FONT}`;
+  g.textBaseline = "middle";
+  // hairline pipe + product name, evenly spaced
+  g.fillStyle = hexToRgba(C.text, 0.22);
+  g.fillRect(pad + 34 + qW + 16, brandY - 9, 1, 18);
+  g.fillStyle = C.muted;
+  g.fillText("RENEWAL RUSH", pad + 34 + qW + 33, brandY + 1);
 
-  // Win/lose status chip (right).
-  g.font = `800 16px ${FONT}`;
+  // Win/lose status chip (right) — quiet pill.
+  g.font = `800 15px ${FONT}`;
   const chip = won ? "CLOSED-WON" : "CHURNED";
-  const chW = g.measureText(chip).width + 40;
-  roundRect(g, W - pad - chW, 56, chW, 30, 15);
-  g.fillStyle = hexToRgba(accent, 0.16);
+  const chW = g.measureText(chip).width + 38;
+  const chH = 32;
+  roundRect(g, W - pad - chW, brandY - chH / 2, chW, chH, chH / 2);
+  g.fillStyle = hexToRgba(accent, 0.12);
   g.fill();
-  g.lineWidth = 1.5;
-  g.strokeStyle = hexToRgba(accent, 0.9);
+  g.lineWidth = 1;
+  g.strokeStyle = hexToRgba(accent, 0.7);
   g.stroke();
   g.fillStyle = accent;
   g.textAlign = "center";
-  g.fillText(chip, W - pad - chW / 2, 72);
+  g.textBaseline = "middle";
+  g.fillText(chip, W - pad - chW / 2, brandY + 1);
 
-  // Headline (script beat).
+  // ── Rank badge (right) — thin emerald ring, clean numeral + name ───────────────
+  const rcx = W - pad - 96;
+  const rcy = 230;
+  const rr = 80;
   g.save();
-  g.shadowColor = accent;
-  g.shadowBlur = 32;
+  g.beginPath();
+  g.arc(rcx, rcy, rr, 0, Math.PI * 2);
+  g.fillStyle = hexToRgba(rk.color, 0.10);
+  g.fill();
+  // thin emerald ring (whisper of glow, not a bloom)
+  g.lineWidth = 2.5;
+  g.strokeStyle = C.emerald;
+  g.shadowColor = hexToRgba(C.emerald, 0.5);
+  g.shadowBlur = 10;
+  g.stroke();
+  g.restore();
+  // RANK overline
+  g.fillStyle = C.muted;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.font = `700 13px ${FONT}`;
+  g.fillText("RANK", rcx, rcy - 34);
+  // numeral
+  g.fillStyle = C.text;
+  g.font = `800 70px ${FONT}`;
+  g.fillText(ROMAN[rk.tier] || "I", rcx, rcy + 14);
+  // rank name under the badge
+  g.fillStyle = C.emeraldSoft;
+  const nameMax = 2 * Math.min(rcx - pad, W - pad - rcx);
+  fitFont(g, rk.name, nameMax, 22, 15, "700");
+  g.fillText(rk.name, rcx, rcy + rr + 26);
+
+  // ── Headline — crisp, confident, no heavy bloom ────────────────────────────────
+  g.save();
+  g.shadowColor = "rgba(0,0,0,0.45)";
+  g.shadowBlur = 6;
+  g.shadowOffsetY = 2;
   g.fillStyle = accent;
-  g.font = `800 88px ${FONT}`;
+  g.font = `800 82px ${FONT}`;
   g.textAlign = "left";
   g.textBaseline = "alphabetic";
-  g.fillText(won ? "RENEWAL SAVED" : "RENEWAL LOST", pad, 210);
+  g.fillText(won ? "RENEWAL SAVED" : "RENEWAL LOST", pad, 222);
   g.restore();
 
-  // Rank medallion (right): I–V numeral + named rank.
-  const rcx = W - 206;
-  const rcy = 248;
-  const rr = 108;
-
-  // Subtitle — Quivly voice. Width-guarded to the left column so it never
-  // collides with the medallion (right edge ≈ rcx - rr).
+  // Subtitle — Quivly voice. Width-guarded so it clears the rank badge.
   let sub;
   if (won) {
     sub = `You saved the quarter — renewal closed-won. Your post-sales team, without the headcount.`;
@@ -635,120 +673,114 @@ function drawResultCard(canvas, r) {
     sub = `Churn got there first — ${e} signal${e === 1 ? "" : "s"} slipped through. Quivly would've had the draft ready.`;
   }
   g.fillStyle = C.muted;
-  g.font = `500 24px ${FONT}`;
-  const subMax = rcx - rr - pad - 28;
+  g.font = `500 23px ${FONT}`;
+  const subMax = rcx - rr - pad - 36;
   const subLines = wrapLines(g, sub, subMax, 2);
   g.textAlign = "left";
   g.textBaseline = "alphabetic";
-  for (let i = 0; i < subLines.length; i++) g.fillText(subLines[i], pad, 246 + i * 32);
-  g.save();
-  g.beginPath();
-  g.arc(rcx, rcy, rr, 0, Math.PI * 2);
-  g.fillStyle = hexToRgba(rk.color, 0.08);
-  g.fill();
-  g.lineWidth = 5;
-  g.strokeStyle = rk.color;
-  g.shadowColor = rk.color;
-  g.shadowBlur = 28;
-  g.stroke();
-  g.restore();
-  g.fillStyle = rk.color;
-  g.textAlign = "center";
-  g.textBaseline = "middle";
-  g.font = `800 96px ${FONT}`;
-  g.fillText(ROMAN[rk.tier] || "I", rcx, rcy + 4);
-  g.fillStyle = C.muted;
-  g.font = `600 15px ${FONT}`;
-  g.fillText("RANK", rcx, rcy - rr + 26);
-  // Rank name — shrink-to-fit the symmetric room around the medallion.
-  g.fillStyle = C.text;
-  const nameMax = 2 * Math.min(rcx - pad, W - pad - rcx);
-  fitFont(g, rk.name, nameMax, 24, 16, "800");
-  g.fillText(rk.name, rcx, rcy + rr + 30);
+  for (let i = 0; i < subLines.length; i++) g.fillText(subLines[i], pad, 264 + i * 32);
 
-  // Stats grid — real game fields only.
+  // ── Stat row — clean grid, hairline dividers, consistent label/value sizing ─────
   const stats = [
-    { label: "ARR SAVED", value: commaARR(r.arr), color: "#FCD34D" },
+    { label: "ARR SAVED", value: commaARR(r.arr), color: "#F5C24B" },
     { label: "DEPLOYS", value: String(num(r.deploys)), color: C.text },
-    { label: "BEST COMBO", value: "×" + num(r.maxCombo), color: C.indigoSoft },
-    { label: "HEALTH", value: Math.round(num(r.health)) + "%", color: r.health >= 60 ? "#34D399" : r.health >= 30 ? "#FBBF24" : "#F87171" },
+    { label: "BEST COMBO", value: "×" + num(r.maxCombo), color: C.emeraldSoft },
+    { label: "HEALTH", value: Math.round(num(r.health)) + "%", color: r.health >= 60 ? C.emerald : r.health >= 30 ? "#F5C24B" : LOST_RED },
   ];
-  const gy = 350;
-  const cellW = (W - pad * 2 - 220) / stats.length; // leave room under the medallion
+  const gy = 366;
+  const bandW = W - pad * 2;
+  const cellW = bandW / stats.length;
+  // framing hairlines (top + bottom of the band)
+  g.strokeStyle = hexToRgba(C.text, 0.08);
+  g.lineWidth = 1;
+  g.beginPath(); g.moveTo(pad, gy); g.lineTo(W - pad, gy); g.stroke();
+  g.beginPath(); g.moveTo(pad, gy + 116); g.lineTo(W - pad, gy + 116); g.stroke();
   for (let i = 0; i < stats.length; i++) {
-    const cx = pad + i * cellW;
+    const cx = pad + i * cellW + 28;
     const s = stats[i];
+    // hairline divider before every cell except the first
+    if (i > 0) {
+      g.strokeStyle = hexToRgba(C.text, 0.08);
+      g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(pad + i * cellW, gy + 22);
+      g.lineTo(pad + i * cellW, gy + 94);
+      g.stroke();
+    }
     g.textAlign = "left";
     g.textBaseline = "alphabetic";
-    g.fillStyle = s.color;
-    g.font = `800 52px ${FONT}`;
-    g.fillText(s.value, cx, gy + 86);
     g.fillStyle = C.muted;
-    g.font = `600 17px ${FONT}`;
-    g.fillText(s.label, cx, gy + 118);
+    g.font = `700 14px ${FONT}`;
+    g.fillText(s.label, cx, gy + 42);
+    g.fillStyle = s.color;
+    g.font = `800 46px ${FONT}`;
+    g.fillText(s.value, cx, gy + 92);
   }
 
-  // Rank blurb + "next rank in $X".
-  g.fillStyle = hexToRgba("#FFFFFF", 0.72);
-  g.font = `500 22px ${FONT}`;
-  g.fillText(rk.blurb, pad, gy + 174);
+  // ── Rank blurb + "next rank" ───────────────────────────────────────────────────
+  g.fillStyle = hexToRgba(C.text, 0.78);
+  g.font = `500 21px ${FONT}`;
+  g.fillText(rk.blurb, pad, gy + 168);
   const nx = nextRank(r.arr);
   if (nx) {
-    g.fillStyle = C.indigoSoft;
-    g.font = `600 20px ${FONT}`;
-    g.fillText(`Next rank: ${nx.name} in ${commaARR(nx.delta)}`, pad, gy + 206);
+    g.fillStyle = C.emeraldSoft;
+    g.font = `600 19px ${FONT}`;
+    g.fillText(`Next rank: ${nx.name} in ${commaARR(nx.delta)}`, pad, gy + 200);
   }
 
-  // Footer — CTA (Quivly voice) + hashtag.
-  const fy = H - 54;
-  g.strokeStyle = hexToRgba("#FFFFFF", 0.08);
+  // ── Footer — CTA + hashtag ─────────────────────────────────────────────────────
+  const fy = H - 52;
+  g.strokeStyle = hexToRgba(C.text, 0.08);
   g.lineWidth = 1;
   g.beginPath();
-  g.moveTo(pad, fy - 26);
-  g.lineTo(W - pad, fy - 26);
+  g.moveTo(pad, fy - 28);
+  g.lineTo(W - pad, fy - 28);
   g.stroke();
   g.textAlign = "left";
   g.textBaseline = "middle";
-  g.fillStyle = C.text;
-  g.font = `600 21px ${FONT}`;
-  g.fillText("Quivly does this for real, autonomously — ", pad, fy);
-  const w1 = g.measureText("Quivly does this for real, autonomously — ").width;
-  g.fillStyle = C.indigoSoft;
-  g.font = `800 21px ${FONT}`;
+  g.fillStyle = C.muted;
+  g.font = `500 20px ${FONT}`;
+  const lead = "Quivly does this for real, autonomously — ";
+  g.fillText(lead, pad, fy);
+  const w1 = g.measureText(lead).width;
+  g.fillStyle = C.emerald;
+  g.font = `800 20px ${FONT}`;
   g.fillText("book a demo → app.quivly.ai", pad + w1, fy);
   g.textAlign = "right";
-  g.fillStyle = C.muted;
-  g.font = `600 20px ${FONT}`;
+  g.fillStyle = hexToRgba(C.text, 0.4);
+  g.font = `600 19px ${FONT}`;
   g.fillText("#RenewalRush", W - pad, fy);
 }
 
 // ── Result overlay CSS (sharp, light backdrop; the card carries the look) ─────────
 const OVERLAY_CSS = `
 .rrb-overlay{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;
- background:radial-gradient(1200px 800px at 50% 24%,rgba(99,102,241,.16),rgba(7,7,11,.82)),rgba(6,6,9,.78);
- -webkit-backdrop-filter:blur(7px) saturate(120%);backdrop-filter:blur(7px) saturate(120%);
+ background:radial-gradient(1200px 800px at 50% 22%,rgba(43,217,138,.14),rgba(6,16,11,.86)),rgba(6,16,11,.82);
+ -webkit-backdrop-filter:blur(8px) saturate(118%);backdrop-filter:blur(8px) saturate(118%);
  opacity:0;transition:opacity .4s ease;font-family:${FONT};padding:24px;box-sizing:border-box;}
 .rrb-overlay.rrb-show{opacity:1;}
-.rrb-card{display:flex;flex-direction:column;gap:18px;align-items:center;max-width:min(94vw,820px);width:100%;
+.rrb-card{display:flex;flex-direction:column;gap:22px;align-items:center;max-width:min(94vw,840px);width:100%;
  transform:translateY(16px) scale(.985);transition:transform .55s cubic-bezier(.16,1,.3,1);}
 .rrb-overlay.rrb-show .rrb-card{transform:none;}
-.rrb-shot{width:100%;height:auto;aspect-ratio:1200 / 675;border-radius:18px;border:1px solid rgba(99,102,241,.4);
- box-shadow:0 30px 90px -20px rgba(0,0,0,.85),0 0 70px -12px rgba(99,102,241,.5);display:block;
- image-rendering:-webkit-optimize-contrast;}
-.rrb-actions{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;width:100%;}
-.rrb-btn{appearance:none;border:1px solid rgba(241,242,247,.16);background:rgba(255,255,255,.05);
- color:${C.text};font:600 15px/1 ${FONT};padding:14px 22px;border-radius:12px;cursor:pointer;letter-spacing:.2px;
+.rrb-shot{width:100%;height:auto;aspect-ratio:1200 / 675;border-radius:20px;border:1px solid rgba(43,217,138,.22);
+ box-shadow:0 40px 80px -28px rgba(0,0,0,.8),0 2px 0 rgba(255,255,255,.04) inset,0 0 0 1px rgba(0,0,0,.4);
+ display:block;image-rendering:-webkit-optimize-contrast;}
+.rrb-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;width:100%;}
+.rrb-btn{appearance:none;border:1px solid rgba(234,246,239,.14);background:rgba(234,246,239,.04);
+ color:${C.text};font:600 15px/1 ${FONT};padding:13px 22px;border-radius:11px;cursor:pointer;letter-spacing:.1px;
  transition:transform .15s ease,background .2s ease,border-color .2s ease;text-decoration:none;
  display:inline-flex;align-items:center;justify-content:center;gap:8px;}
-.rrb-btn:hover{transform:translateY(-2px);background:rgba(255,255,255,.09);border-color:rgba(241,242,247,.3);}
+.rrb-btn:hover{transform:translateY(-2px);background:rgba(234,246,239,.08);border-color:rgba(234,246,239,.26);}
 .rrb-btn:active{transform:translateY(0);}
-.rrb-primary{background:linear-gradient(180deg,${C.indigo},${C.indigoDeep});border-color:transparent;color:#fff;
- box-shadow:0 12px 32px -8px rgba(99,102,241,.7);}
-.rrb-primary:hover{background:linear-gradient(180deg,#7376f4,#5b52f0);}
+.rrb-primary{background:linear-gradient(180deg,${C.emerald},${C.forest});border-color:transparent;color:#07120c;
+ font-weight:700;box-shadow:0 12px 30px -10px rgba(43,217,138,.55);}
+.rrb-primary:hover{background:linear-gradient(180deg,#3DE89A,${C.deep});color:#07120c;
+ box-shadow:0 16px 36px -10px rgba(43,217,138,.7);}
 .rrb-close{position:absolute;top:18px;right:20px;width:42px;height:42px;border-radius:50%;
- border:1px solid rgba(241,242,247,.18);background:rgba(255,255,255,.06);color:${C.text};font-size:22px;
- cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;}
-.rrb-close:hover{background:rgba(255,255,255,.12);}
+ border:1px solid rgba(234,246,239,.16);background:rgba(234,246,239,.05);color:${C.text};font-size:22px;
+ cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;
+ transition:background .2s ease,border-color .2s ease;}
+.rrb-close:hover{background:rgba(234,246,239,.12);border-color:rgba(234,246,239,.3);}
 @media (max-width:560px){.rrb-btn{flex:1 1 42%;}}
 @media (prefers-reduced-motion:reduce){.rrb-overlay,.rrb-card{transition-duration:.01ms;}}
 `;

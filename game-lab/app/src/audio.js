@@ -247,7 +247,10 @@ export function createAudio(ctx) {
     g.gain.exponentialRampToValueAtTime(0.0002, t0 + d);
     const nodes = [osc, g];
     const fs = formants && formants.length ? formants : [[700, 8], [1100, 9]];
-    for (const [ff, q] of fs) {
+    for (const entry of fs) {
+      // ponytail: callers pass flat freqs [700,1300]; default uses [freq,Q] pairs — accept both
+      const ff = Array.isArray(entry) ? entry[0] : entry;
+      const q = Array.isArray(entry) ? entry[1] : 8;
       const bp = c.createBiquadFilter();
       bp.type = "bandpass";
       bp.frequency.value = ff;

@@ -81,9 +81,12 @@ import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { Ray } from "@babylonjs/core/Culling/ray";
+import { PhysicsAggregate } from "@babylonjs/core/Physics/v2/physicsAggregate"; // C5: Havok ragdolls (only when ctx.useHavok)
+import { PhysicsShapeType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugin";
 
 import { BUCKET_ARR, SIGNALS, mulberry32 } from "./game.js";
 import { SIGNAL_META, RISK_TIERS } from "./brand.js";
+import { createEnemyAI } from "./enemyai.js"; // Yuka steering: navmesh paths, arrive, separation, avoidance
 
 // ── tiny math (local; game.js stays pure / un-imported for these) ───────────────
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
@@ -251,6 +254,10 @@ export function createEnemies(ctx) {
     return { update() {}, dispose() {}, list: () => [] };
   }
 
+  // C5: when Havok is on, ragdoll parts become dynamic rigid bodies (stepped by main's
+  // pe._step at scaled dt → they slow in bullet-time). Else the hand-rolled integrator runs.
+  const useHavok = !!(ctx.useHavok && scene.getPhysicsEngine && scene.getPhysicsEngine());
+
   let disposed = false;
   let uid = 0;
 
@@ -380,6 +387,7 @@ export function createEnemies(ctx) {
   let tensionNow = 0;
   let fireBudget = 2.0;
   let telegraphingCount = 0;
+  let engageCount = 0; // squad: how many agents are crowding the player right now
   let calloutCd = 0;
   let losCursor = 0;
   let lastPx = 0, lastPy = 1.7, lastPz = 0;
@@ -396,13 +404,20 @@ export function createEnemies(ctx) {
 
   // Cover / line-of-sight occluders (built lazily once — world is created before us).
   let occluders = null; // Set<Mesh> (buildings + walls)
+  let enemyAI = null; // Yuka steering layer (lazily built once footprints exist)
   const _occPred = (m) => occluders && occluders.has(m);
   let footprints = []; // [{cx,cz,r,minx,maxx,minz,maxz}] building AABBs (cover targets + analytic LOS)
   let useRaycastLOS = true;
 
-  const playerX = () => (camera.globalPosition || camera.position).x;
-  const playerY = () => (camera.globalPosition || camera.position).y;
-  const playerZ = () => (camera.globalPosition || camera.position).z;
+  // PLAYER POSITION SOURCE (TPS retarget): the controller now writes the visible avatar's
+  // world position to ctx.state.playerPos each frame, so enemies aim at the CHARACTER, not the
+  // over-the-shoulder camera behind it. Falls back to the camera if the controller hasn't
+  // written yet (frame 0) or in a camera-only build. This single helper retargets every
+  // player-position read below (distance/LOS/aim @step, spawn placement, ragdoll blast dir).
+  const playerPos = () => (ctx.state && ctx.state.playerPos) || camera.globalPosition || camera.position;
+  const playerX = () => playerPos().x;
+  const playerY = () => playerPos().y;
+  const playerZ = () => playerPos().z;
   const readFlag = (v, d) => (v == null ? d : typeof v === "function" ? !!v() : !!v);
 
   function buildOccluders() {
@@ -911,6 +926,18 @@ export function createEnemies(ctx) {
     ent.lastKnownX = playerX();
     ent.lastKnownZ = playerZ();
 
+    // Yuka vehicle owns the live XZ transform (steering/separation/avoidance/paths). The FSM
+    // still picks WHERE to go; Yuka decides HOW to get there. Released on death/escape so the
+    // ragdoll/Havok body can take over the body (they never drive the same transform at once).
+    ent.ai?.remove();
+    ent.ai = enemyAI
+      ? enemyAI.addAgent(ent.root.position.x, ent.root.position.z, {
+          maxSpeed: ent.speed, maxForce: 12 + ent.steer * 6,
+          sepRadius: SEP_R, sepWeight: SEP_FORCE,
+        })
+      : null;
+    ent.repathCd = 0;
+
     ent.badge.setEnabled(true);
     ent.shadow.setEnabled(true);
     ent.aimLine.setEnabled(false);
@@ -950,6 +977,7 @@ export function createEnemies(ctx) {
   }
 
   function release(ent) {
+    ent.ai?.remove(); ent.ai = null; // backstop handoff (death/escape paths also clear it)
     ent.alive = false;
     ent.removing = 0;
     ent.removeMode = null;
@@ -959,6 +987,11 @@ export function createEnemies(ctx) {
     ent.aimLine.setEnabled(false);
     const ri = ragdolls.indexOf(ent);
     if (ri >= 0) ragdolls.splice(ri, 1);
+    if (useHavok) { // tear down the dynamic bodies before parts are re-parented for pooling
+      for (const part of ent.parts) {
+        if (part._agg) { try { part._agg.dispose(); } catch { /* noop */ } part._agg = null; }
+      }
+    }
     resetPose(ent);
     ent.badge.setEnabled(false);
     ent.shadow.setEnabled(false);
@@ -1045,6 +1078,7 @@ export function createEnemies(ctx) {
 
   // An account churns: the agent slipped past (aged out) or reached the Renewal Gate line.
   function churnAway(ent) {
+    ent.ai?.remove(); ent.ai = null; // stop steering — agent is leaving the field
     ent.hit.metadata = null;
     ent.telegraphT = 0;
     ent.aimLine.setEnabled(false);
@@ -1143,13 +1177,29 @@ export function createEnemies(ctx) {
     return Math.abs(playerVel.x * perpx + playerVel.z * perpz);
   }
 
+  // ── squad coordination ───────────────────────────────────────────────────────
+  // Cap how many agents pile onto the player at once (scales with tension); the rest are
+  // routed to FLANK instead, so a wave reads as a coordinated push — some engaging, others
+  // arcing around — not a blob. An agent already engaging keeps its slot.
+  function engageSlotFree(ent) {
+    if (ent.state === ST.ENGAGE) return true;
+    const cap = Math.max(2, Math.round(lerp(2, 6, clamp01(tensionNow))));
+    return engageCount < cap;
+  }
+
   // ── brain: utility/FSM transitions (runs on a cheap per-agent cadence) ────────
   function setState(ent, s) {
     if (ent.state === s) return;
     ent.state = s;
     ent.stateTime = 0;
-    if (s === ST.FLANK) {
-      ent.flankSign = fr() < 0.5 ? -1 : 1;
+    if (s === ST.ENGAGE) {
+      engageCount++; // claim a slot the moment we engage (tightens the cap within a frame)
+    } else if (s === ST.FLANK) {
+      ent.flankSign = fr() < 0.5 ? -1 : 1; // keep the draw, then bias for fxRng stability
+      // squad: prefer the less-crowded arc so two flankers don't stack on one side
+      let left = 0, right = 0;
+      for (const o of active) if (o !== ent && o.alive && o.state === ST.FLANK) (o.flankSign < 0 ? left++ : right++);
+      if (left > right) ent.flankSign = -1; else if (right > left) ent.flankSign = 1;
       if (fr() < 0.4) maybeBanter("flank", ent);
     } else if (s === ST.COVER) {
       ent.coverTarget = findCover(ent);
@@ -1192,7 +1242,10 @@ export function createEnemies(ctx) {
 
     // LOS true.
     if (dist > w.range) { setState(ent, ST.ADVANCE); return; }
-    if (ent.state === ST.ADVANCE || ent.state === ST.FLANK) { setState(ent, ST.ENGAGE); return; }
+    if (ent.state === ST.ADVANCE || ent.state === ST.FLANK) {
+      // squad: engage if a slot is free, else flank in (don't all crowd the player at once).
+      setState(ent, engageSlotFree(ent) ? ST.ENGAGE : ST.FLANK); return;
+    }
     if (ent.state === ST.ENGAGE && ent.stateTime > frRange(3.5, 6)) {
       setState(ent, fr() < 0.5 ? ST.FLANK : ST.COVER); // reposition so the duel keeps moving
     }
@@ -1492,6 +1545,7 @@ export function createEnemies(ctx) {
     if (ent.removing > 0) return;
     if (ragdolls.length >= MAX_RAGDOLLS) release(ragdolls[0]);
 
+    ent.ai?.remove(); ent.ai = null; // hand the body to the ragdoll/Havok — Yuka lets go
     ent.alive = false;
     ent.removeMode = "ragdoll";
     ent.removing = RAGDOLL_LIFE;
@@ -1562,6 +1616,18 @@ export function createEnemies(ctx) {
         v.y = up;
         v.z = az * frRange(1.0, 2.6) + noz * frRange(0.5, 1.6);
         w.set((fr() - 0.5) * 18, (fr() - 0.5) * 18, (fr() - 0.5) * 18);
+      }
+
+      // C5: hand the part to Havok as a dynamic body, seeded with the SAME computed v/w.
+      // NOTE: no fr()/frRange() below — adding an RNG draw here would desync the daily seed
+      // (the fxRng stream also drives AI/banter). See the header determinism warning.
+      if (useHavok) {
+        try {
+          const agg = new PhysicsAggregate(m, PhysicsShapeType.BOX, { mass: 1, restitution: RESTITUTION }, scene);
+          agg.body.setLinearVelocity(v);
+          agg.body.setAngularVelocity(w);
+          part._agg = agg; // disposed in release()
+        } catch { /* noop — fall through to nothing; mesh just stays put */ }
       }
     }
 
@@ -1666,7 +1732,31 @@ export function createEnemies(ctx) {
 
     // movement (hold mostly still while winding up the shot)
     moveTarget(ent, _tgt);
-    steerTo(ent, _tgt.x, _tgt.z, dt, telegraphing ? 0.32 : 1);
+    if (ent.ai) {
+      ent.ai.setMaxSpeed(ent.speed * (telegraphing ? 0.32 : 1));
+      // Blind ADVANCE (no LOS, memory stale): route to last-known via the navmesh so the agent
+      // searches AROUND buildings instead of beelining into a wall. Else Arrive to the FSM point.
+      const blindAdvance = ent.state === ST.ADVANCE && !ent.los && ent.seenAge > SEEN_FORGET;
+      ent.repathCd -= dt;
+      if (blindAdvance) {
+        if (ent.repathCd <= 0) {
+          const path = enemyAI.pathTo(ent.root.position.x, ent.root.position.z, ent.lastKnownX, ent.lastKnownZ);
+          if (!ent.ai.setPath(path)) ent.ai.setTarget(_tgt.x, _tgt.z); // no route → direct
+          ent.repathCd = 0.6; // fixed cadence — no fxRng draw (keeps banter/ragdoll stream stable)
+        }
+      } else {
+        ent.ai.setTarget(_tgt.x, _tgt.z);
+      }
+      // Read back the position Yuka integrated at the top of this frame; clamp to world bounds.
+      const veh = ent.ai.vehicle;
+      const cx = clamp(veh.position.x, BOUNDS.minX, BOUNDS.maxX);
+      const cz = clamp(veh.position.z, BOUNDS.minZ, BOUNDS.maxZ);
+      if (cx !== veh.position.x || cz !== veh.position.z) veh.position.set(cx, 0, cz);
+      ent.root.position.x = cx; ent.root.position.z = cz;
+      ent.vx = veh.velocity.x; ent.vz = veh.velocity.z;
+    } else {
+      steerTo(ent, _tgt.x, _tgt.z, dt, telegraphing ? 0.32 : 1); // fallback until the AI is built
+    }
 
     // facing: aim at the player when engaging/winding up, else face travel
     const facePlayer = telegraphing || (ent.los && ent.distToPlayer < ent.weapon_.range);
@@ -1834,8 +1924,17 @@ export function createEnemies(ctx) {
 
     if (!occluders) buildOccluders();
 
+    // Yuka steering: build once (needs the city's footprints), then integrate ALL live
+    // vehicles for this frame. Runs on the scaled frame dt → enemies slow in bullet-time.
+    // Targets were set last frame in stepEntity (1-frame latency, imperceptible).
+    if (!enemyAI && (footprints.length || occluders)) {
+      enemyAI = createEnemyAI({ bounds: BOUNDS, footprints });
+    }
+    if (enemyAI) enemyAI.update(dt);
+
     // Advance ragdoll physics on a fixed timestep (stable + cheap).
-    if (ragdolls.length) {
+    // Havok path: parts are dynamic bodies stepped by main's pe._step — skip the integrator.
+    if (ragdolls.length && !useHavok) {
       ragAcc += dt;
       let sub = 0;
       while (ragAcc >= RAG_H && sub < RAG_MAX_SUB) { ragdollSubstep(RAG_H); ragAcc -= RAG_H; sub++; }
@@ -1869,9 +1968,15 @@ export function createEnemies(ctx) {
     // Fire-token governor regen (bounds incoming shots + raycasts; never starves to zero).
     fireBudget = Math.min(FIRE_BUDGET_MAX, fireBudget + (FIRE_REGEN_BASE + tension * FIRE_REGEN_TENSION) * dt);
 
-    // Count current telegraphs (gate computed from last frame's state — no drift).
+    // Count current telegraphs + engagers (gates computed from last frame's state — no drift).
     telegraphingCount = 0;
-    for (let i = 0; i < active.length; i++) if (active[i].alive && active[i].telegraphT > 0) telegraphingCount++;
+    engageCount = 0;
+    for (let i = 0; i < active.length; i++) {
+      const e = active[i];
+      if (!e.alive) continue;
+      if (e.telegraphT > 0) telegraphingCount++;
+      if (e.state === ST.ENGAGE) engageCount++;
+    }
 
     // Staggered LOS perception — only a few agents raycast per frame (round-robin).
     if (footprints.length || occluders) {

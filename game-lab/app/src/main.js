@@ -21,6 +21,9 @@ const canvas = document.getElementById("game");
 const engine = new Engine(canvas, true, { stencil: true }, true); // antialias + adaptToDeviceRatio
 
 const scene = new Scene(engine);
+// Perf: combat picks via explicit camera.getForwardRay / scene.pickWithRay — never hover.
+// Skip the per-pointer-move scene pick so mouse-look doesn't ray-cast the scene each move.
+scene.skipPointerMovePicking = true;
 
 // Camera created BEFORE modules. (0,1.7,0), forward = +Z, aligns with world's +Z layout.
 // Do NOT attachControl — controller clears camera inputs and owns look/move + pointer lock.
@@ -53,11 +56,43 @@ let seedNum = 0;
 for (let i = 0; i < dateStr.length; i++) seedNum = (seedNum * 31 + dateStr.charCodeAt(i)) >>> 0;
 
 const game = new Game(seedNum);
-const ctx = { engine, scene, camera, canvas, game, bus, onFrame, state, dailySeed: dateStr, upgrades: {} };
+// metaDraftUI:false → meta.js emits "draft" but does NOT render its own picker; the HUD
+// owns the single upgrade-draft overlay (otherwise both render → the draft appears twice).
+const ctx = { engine, scene, camera, canvas, game, bus, onFrame, state, dailySeed: dateStr, upgrades: {}, metaDraftUI: false };
 
 // "start" = true restart. hurt -> health, respecting dash i-frames (controller sets state.invuln).
 bus.on("start", () => { game.reset(); state.running = true; state.paused = false; });
 bus.on("hurt", (e) => { if (!state.invuln) game.takeDamage(e?.amount || 0); });
+
+// ── Havok physics (OPT-IN, default OFF) ──────────────────────────────────────
+// Enabled only with ?havok=1 in the URL. We DYNAMIC-import @babylonjs/havok so its
+// ~MB WASM stays out of the default bundle and the shipped game keeps its instant,
+// physics-free start. When on: PCC-as-resolver controller + Havok ragdolls (C3/C5).
+// We disable the scene's auto physics step and drive pe._step(SCALED dt) ourselves so
+// dynamic bodies (ragdolls) slow during the shootdodge bullet-time — verified headless:
+// pe._step(scaledDelta) gives true t^2 slow-motion (setTimeStep does NOT). See test/physics.test.js.
+ctx.useHavok = typeof location !== "undefined" && new URLSearchParams(location.search).has("havok");
+
+// Async boot wrapper: lets us `await` the optional Havok WASM load before module init
+// WITHOUT top-level await (kept out so the es2020 build target stays valid). When Havok
+// is off this resolves instantly — same behaviour as before.
+(async () => {
+if (ctx.useHavok) {
+  try {
+    const [{ default: HavokPhysics }, { HavokPlugin }] = await Promise.all([
+      import("@babylonjs/havok"),
+      import("@babylonjs/core/Physics/v2/Plugins/havokPlugin"),
+      import("@babylonjs/core/Physics/v2/physicsEngineComponent"), // augments Scene.enablePhysics
+    ]);
+    const havok = await HavokPhysics();
+    scene.enablePhysics(new Vector3(0, -22, 0), new HavokPlugin(true, havok));
+    scene.physicsEnabled = false; // we step manually (below) with scaled dt for bullet-time
+    ctx.physics = scene.getPhysicsEngine();
+  } catch (e) {
+    console.error("Havok init failed — falling back to hand-rolled controller/ragdolls", e);
+    ctx.useHavok = false;
+  }
+}
 
 // Init order (ARCHITECTURE.md): fx -> world -> audio -> hud -> brand -> enemies -> combat -> controller.
 const step = (name, fn) => {
@@ -103,9 +138,28 @@ engine.runRenderLoop(() => {
     }
   }
 
+  // Step Havok dynamic bodies (ragdolls) with the SCALED dt so they slow in bullet-time.
+  // dtSec is already raw*timeScale (0 while paused → frozen). Clamp to avoid hitch blow-ups.
+  if (ctx.physics) { try { ctx.physics._step(Math.min(dtSec, 0.05)); } catch (e) { console.error(e); } }
+
   for (const fn of frameCbs) { try { fn(dtSec); } catch (e) { console.error(e); } }
   scene.render();
 });
 
 addEventListener("resize", () => engine.resize());
+
+// Robustness: auto-pause when the tab is backgrounded (otherwise rAF throttles and the
+// next visible frame's getDeltaTime is huge → everything teleports) or when the WebGL
+// context is lost (Babylon auto-rebuilds GL resources on restore; we just pause/resume).
+// We track OUR OWN pause via autoPaused so we never clobber a HUD modal pause.
+let autoPaused = false;
+const autoPause = () => { if (!state.paused) { state.paused = true; autoPaused = true; } };
+const autoResume = () => { if (autoPaused) { state.paused = false; autoPaused = false; } };
+addEventListener("visibilitychange", () => { if (document.hidden) autoPause(); else autoResume(); });
+addEventListener("blur", autoPause);
+addEventListener("focus", autoResume);
+engine.onContextLostObservable.add(autoPause);
+engine.onContextRestoredObservable.add(autoResume);
+
 bus.emit("start");
+})();

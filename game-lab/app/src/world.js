@@ -42,6 +42,8 @@ import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator";
 import "@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent";
 import { ParticleSystem } from "@babylonjs/core/Particles/particleSystem";
+import { PhysicsAggregate } from "@babylonjs/core/Physics/v2/physicsAggregate"; // static colliders (only used when ctx.useHavok)
+import { PhysicsShapeType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugin";
 import { ACCOUNTS, accountFor } from "./accounts.js";
 import { RENEWAL_MS } from "./game.js"; // day-night cycle is driven by the renewal clock
 
@@ -1247,6 +1249,56 @@ export function createWorld(ctx) {
     try { sun.dispose(); } catch { /* noop */ }
     try { hemi.dispose(); } catch { /* noop */ }
   };
+
+  // Perf (Babylon optimize-your-scene): freeze the world matrix of structural meshes
+  // that never move so Babylon skips their per-frame transform sync. ALLOWLIST by name —
+  // only genuinely-static geometry. Excludes anything animated/moving: the gate (rings
+  // rotate, D4 will animate it), celestial bodies (sun/moon/star reposition each frame),
+  // and the glowing beacon/band emissives. We freeze world MATRICES only — NOT materials:
+  // the day/night cycle pushes per-frame emissive changes into shared materials, so
+  // material.freeze()/blockMaterialDirtyMechanism would break the neon night look.
+  const STATIC_PREFIXES = [
+    "world_ground", "world_hq_", "world_cap_", "world_wall_",
+    "world_blk_", "world_park_", "world_parkpath_", "world_plaza_",
+    "world_waste_ground", "world_sign_base", "world_grass_blade",
+  ];
+  for (const m of meshes) {
+    const n = m.name || "";
+    if (STATIC_PREFIXES.some((p) => n.startsWith(p))) {
+      try { m.freezeWorldMatrix(); } catch { /* noop */ }
+    }
+  }
+
+  // C2 — Static physics colliders (only when Havok is on). The player PCC collides/slides
+  // against these. Only solid, walkable-against geometry: ground, building bodies, arena
+  // walls. Cosmetic slabs/caps/signs are skipped (player never collides with them).
+  if (ctx.useHavok && scene.getPhysicsEngine && scene.getPhysicsEngine()) {
+    const COLLIDER_PREFIXES = ["world_ground", "world_hq_", "world_wall_"];
+    for (const m of meshes) {
+      const n = m.name || "";
+      if (COLLIDER_PREFIXES.some((p) => n.startsWith(p))) {
+        try { new PhysicsAggregate(m, PhysicsShapeType.BOX, { mass: 0 }, scene); } catch { /* noop */ }
+      }
+    }
+
+    // C7 — minimal authored verticality (Havok only) so the PCC's slope-handling and
+    // stair step-up actually read (a flat city only exercises wall-slide). A ramp up to a
+    // raised plaza + a short stair stack near spawn. SCAFFOLD — reposition during playtest
+    // so it sits in open ground, not clipping a block.
+    const vMat = track(mats, new StandardMaterial("world_vert_mat", scene));
+    vMat.diffuseColor = new Color3(0.42, 0.46, 0.5);
+    const vBox = (name, w, h, d, x, y, z, rotX) => {
+      const m = track(meshes, MeshBuilder.CreateBox(name, { width: w, height: h, depth: d }, scene));
+      m.position.set(x, y, z); if (rotX) m.rotation.x = rotX; m.material = vMat;
+      m.isPickable = false; m.receiveShadows = true; m.freezeWorldMatrix();
+      try { new PhysicsAggregate(m, PhysicsShapeType.BOX, { mass: 0 }, scene); } catch { /* noop */ }
+      return m;
+    };
+    const PX = 26, PZ = 34; // a clear-ish offset from spawn (origin); tune in playtest
+    vBox("world_vert_plaza", 16, 2, 16, PX, 1, PZ);                 // raised plaza (top at y=2)
+    vBox("world_vert_ramp", 10, 0.6, 14, PX - 12, 1.0, PZ, -0.28);  // ~16° ramp up to it
+    for (let i = 0; i < 4; i++) vBox(`world_vert_step_${i}`, 8, 0.45, 1.2, PX + 4, 0.22 + i * 0.45, PZ + 9 + i * 1.2); // stairs
+  }
 
   return {
     update: tick,

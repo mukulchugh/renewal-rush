@@ -38,7 +38,10 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Color4 } from "@babylonjs/core/Maths/math.color";
 import { DefaultRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline";
 import { SSAO2RenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline";
+import { SSRRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssrRenderingPipeline";
+import "@babylonjs/core/Rendering/prePassRendererSceneComponent"; // side-effect: SSR uses the prepass renderer
 import { GlowLayer } from "@babylonjs/core/Layers/glowLayer";
+import { MotionBlurPostProcess } from "@babylonjs/core/PostProcesses/motionBlurPostProcess"; // D1: dash/dive blur
 import { ParticleSystem } from "@babylonjs/core/Particles/particleSystem";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { ImageProcessingConfiguration } from "@babylonjs/core/Materials/imageProcessingConfiguration";
@@ -76,6 +79,21 @@ const SHAKE_F2 = 71.0;
 
 const HITSTOP_SCALE = 0.04; // near-freeze (not 0, so other modules never /0 dt)
 
+// ── Adaptive quality (the "runs on a weak GPU" lever; de-risks the GPU playtest) ──
+// One controller, two axes: it steps internal render resolution down via
+// engine.setHardwareScalingLevel and, at the worst tier, also drops SSAO. (We do NOT
+// run a separate SceneOptimizer — two FPS controllers would fight over the same signal.)
+// Tiers MULTIPLY the device-default hardware-scaling baseline, so a retina display keeps
+// its native ratio at tier 0 and we only ever render *coarser*, never finer, than default.
+const QUALITY_TIERS = [
+  { scale: 1.0, ssao: true },   // 0 — full
+  { scale: 1.25, ssao: true },  // 1 — slightly coarser
+  { scale: 1.5, ssao: false },  // 2 — coarse + AO off (last resort)
+];
+const QUALITY_DOWN_FPS = 50; // sustained below → step down a tier
+const QUALITY_UP_FPS = 58;   // sustained above → step back up a tier
+const QUALITY_EVAL_SEC = 1.5; // how long a condition must hold before acting (anti-flap)
+
 const FLASH_DECAY = 9.0; // flash opacity e-fold/sec (~0.2s fade)
 const FLASH_Z = 40; // overlay z-index (above canvas, brief over HUD is fine)
 
@@ -86,7 +104,7 @@ const DEPLOY_ARR_FULL = 1600;
 
 // Brand palette (CSS for flashes).
 const BRAND = {
-  indigo: "#6366F1",
+  indigo: "#2BD98A", // Quivly forest/emerald brand accent (was indigo #6366F1)
   success: "#34D399",
   warning: "#FBBF24",
   risk: "#F87171",
@@ -169,10 +187,42 @@ export function createFx(ctx) {
     ssao = null; // never let AO block the render path
   }
 
+  // ── Adaptive quality state ─────────────────────────────────────────────────
+  // Baseline = the device-default hardware scaling (engine was created with
+  // adaptToDeviceRatio, so this is 1/devicePixelRatio on retina). Tiers scale it.
+  const baseHwScale = (() => { try { return engine.getHardwareScalingLevel() || 1; } catch { return 1; } })();
+  let qualityTier = 0;
+  let qualityHoldSec = 0; // how long the current step condition has held
+  let ssaoAttached = !!ssao; // SSAO is created attached to [camera]
+  const applyQualityTier = () => {
+    const t = QUALITY_TIERS[qualityTier];
+    try { engine.setHardwareScalingLevel(baseHwScale * t.scale); } catch { /* noop */ }
+    // Actually detach/attach the SSAO pipeline (zeroing strength still runs the passes).
+    if (ssao && t.ssao !== ssaoAttached) {
+      const mgr = scene.postProcessRenderPipelineManager;
+      try {
+        if (t.ssao) mgr.attachCamerasToRenderPipeline("rr-ssao", camera);
+        else mgr.detachCamerasFromRenderPipeline("rr-ssao", camera);
+        ssaoAttached = t.ssao;
+      } catch { /* noop */ }
+    }
+  };
+
   // ── GlowLayer ──────────────────────────────────────────────────────────────
   const glow = new GlowLayer("rr-glow", scene, { blurKernelSize: 24 });
   glow.intensity = GLOW_BASE;
   let glowPulse = 0;
+
+  // ── D1: Motion blur on dash/dive (camera-based → no prepass cost) ───────────
+  // Strength is 0 at rest (normal mouse-look never smears); it ramps up only while
+  // dashing/diving so those signature moves get speed-streaks. PLAYTEST-TUNABLE.
+  let motionBlur = null;
+  try {
+    motionBlur = new MotionBlurPostProcess("rr-mblur", scene, 1.0, camera);
+    motionBlur.isObjectBased = false; // camera-only: cheap, no geometry buffer
+    motionBlur.motionStrength = 0;
+  } catch { motionBlur = null; } // never let it block the render path
+  let mblurNow = 0;
 
   // ── Soft round spark texture (shared by all bursts) ────────────────────────
   const sparkTex = makeSparkTexture(scene);
@@ -279,6 +329,31 @@ export function createFx(ctx) {
       if (hitStopLeft > 0) hitStopLeft = Math.max(0, hitStopLeft - dt);
       if (slowmoLeft > 0) slowmoLeft = Math.max(0, slowmoLeft - dt);
       applyTimeScale();
+    }
+
+    // Adaptive quality: nudge a tier only after a condition holds for QUALITY_EVAL_SEC
+    // (anti-flap). engine.getFps() is Babylon's smoothed FPS. Frozen while paused.
+    if (!(state && state.paused)) {
+      const fps = engine.getFps();
+      const wantDown = fps < QUALITY_DOWN_FPS && qualityTier < QUALITY_TIERS.length - 1;
+      const wantUp = fps > QUALITY_UP_FPS && qualityTier > 0;
+      if (wantDown || wantUp) {
+        qualityHoldSec += dt;
+        if (qualityHoldSec >= QUALITY_EVAL_SEC) {
+          qualityTier += wantDown ? 1 : -1;
+          qualityHoldSec = 0;
+          applyQualityTier();
+        }
+      } else {
+        qualityHoldSec = 0;
+      }
+    }
+
+    // D1: motion-blur strength tracks dash/dive (eased so it streaks in and out smoothly).
+    if (motionBlur) {
+      const want = (state && (state.dashing || state.diving)) ? 0.65 : 0;
+      mblurNow += (want - mblurNow) * (1 - Math.exp(-12 * dt));
+      motionBlur.motionStrength = mblurNow < 0.004 ? 0 : mblurNow;
     }
 
     // Glow pulse decay.
@@ -482,6 +557,7 @@ export function createFx(ctx) {
     hitStopLeft = 0;
     slowmoLeft = 0;
     if (state) state.timeScale = 1;
+    try { engine.setHardwareScalingLevel(baseHwScale); } catch { /* noop */ }
 
     offFns.forEach((f) => {
       try {
@@ -496,6 +572,9 @@ export function createFx(ctx) {
     }
     activePS.clear();
 
+    try {
+      motionBlur && motionBlur.dispose();
+    } catch {}
     try {
       ssao && ssao.dispose();
     } catch {}

@@ -3,6 +3,13 @@
     "unreal-mcp": {
       "type": "http",
       "url": "http://127.0.0.1:8000/mcp"
+    },
+    "netlify": {
+      "command": "npx",
+      "args": ["-y", "@netlify/mcp"],
+      "env": {
+        "NETLIFY_PERSONAL_ACCESS_TOKEN": "${NETLIFY_PERSONAL_ACCESS_TOKEN}"
+      }
     }
   }
 }
