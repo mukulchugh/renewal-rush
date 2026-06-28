@@ -118,6 +118,15 @@ export async function applyEnvIfPresent(scene) {
   try {
     if (/\.hdr($|\?)/i.test(ENV_URL)) {
       const { HDRCubeTexture } = await import("@babylonjs/core/Materials/Textures/hdrCubeTexture");
+      // prefilterOnLoad runs HDRFiltering, which RGBD-encodes the radiance mips. HDRFiltering
+      // auto-imports its own shaders but NOT rgbdEncode/Decode — without these the tree-shaken
+      // build has no rgbdDecode in the ShaderStore, so Babylon fetches it at runtime and gets the
+      // dev server's SPA-fallback index.html → "FRAGMENT SHADER ERROR: '<' syntax error". Pull them
+      // in as a side-effect so the IBL actually prefilters instead of erroring out.
+      await Promise.all([
+        import("@babylonjs/core/Shaders/rgbdEncode.fragment"),
+        import("@babylonjs/core/Shaders/rgbdDecode.fragment"),
+      ]);
       // args: size 256, noMipmap=false, generateHarmonics=true (diffuse IBL via SH),
       // gammaSpace=false (HDR is linear), prefilterOnLoad=true (radiance mips → rough
       // surfaces blur reflections correctly instead of mirroring a sharp env).
