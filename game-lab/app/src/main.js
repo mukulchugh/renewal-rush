@@ -20,7 +20,10 @@ import { createSky } from "./sky.js";
 import { createMeta } from "./meta.js";
 
 const canvas = document.getElementById("game");
-const engine = new Engine(canvas, true, { stencil: true }, true); // antialias + adaptToDeviceRatio
+// antialias:false on purpose — the DefaultRenderingPipeline renders to an offscreen HDR target and
+// resolves edges with FXAA (fx.js), so canvas MSAA is a redundant, wasted resolve every frame.
+// powerPreference:"high-performance" → browser picks the discrete GPU on dual-GPU laptops.
+const engine = new Engine(canvas, false, { stencil: true, powerPreference: "high-performance" }, true); // FXAA handles AA; adaptToDeviceRatio
 
 const scene = new Scene(engine);
 // Perf: combat picks via explicit camera.getForwardRay / scene.pickWithRay — never hover.
@@ -145,6 +148,34 @@ step("controller", () => createController(ctx));
 ctx.meta = step("meta", () => createMeta(ctx));
 
 if (typeof window !== "undefined") window.__rr = { engine, scene, game, state, ctx }; // dev introspection
+
+// Perf instrumentation behind ?perf=1 — measures DEVICE-INDEPENDENT proxies (draw calls,
+// active meshes, CPU/GPU frame time) that transfer to real hardware, unlike a raw FPS number
+// which is meaningless under software-GL. Dynamic-imported so it never ships in the bundle.
+if (typeof window !== "undefined" && /[?&]perf=1\b/.test(location.search)) {
+  (async () => {
+    const { SceneInstrumentation } = await import("@babylonjs/core/Instrumentation/sceneInstrumentation");
+    const { EngineInstrumentation } = await import("@babylonjs/core/Instrumentation/engineInstrumentation");
+    const si = new SceneInstrumentation(scene);
+    si.captureActiveMeshesEvaluationTime = true; si.captureFrameTime = true; si.captureRenderTime = true;
+    const ei = new EngineInstrumentation(engine);
+    ei.captureGPUFrameTime = true; // timer-query ext; reads 0 where unsupported (e.g. software-GL)
+    const snap = () => ({
+      fps: +engine.getFps().toFixed(1),
+      drawCalls: si.drawCallsCounter.current,
+      activeMeshes: scene.getActiveMeshes().length,
+      totalMeshes: scene.meshes.length,
+      textures: scene.textures.length,
+      cpuFrameMs: +si.frameTimeCounter.lastSecAverage.toFixed(2),
+      gpuFrameMs: +(ei.gpuFrameTimeCounter.lastSecAverage / 1e6).toFixed(2), // ns→ms
+      hwScale: engine.getHardwareScalingLevel(),
+    });
+    window.__rr.perf = snap;
+    let acc = 0;
+    onFrame(() => { acc++; if (acc % 120 === 0) console.log("[perf]", JSON.stringify(snap())); });
+    console.log("[perf] instrumentation on — window.__rr.perf() for a snapshot");
+  })();
+}
 
 let prevStatus = game.status;
 engine.runRenderLoop(() => {
