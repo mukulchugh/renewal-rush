@@ -56,10 +56,17 @@ const TEX = {
 
 // A real environment map — overrides the procedural sky-probe IBL in world.js for
 // sharper, authored real-world reflections. Accepts a prefiltered ".env" OR a raw
-// equirectangular ".hdr" (Babylon prefilters the .hdr on load). potsdamer_platz =
-// Poly Haven CC0 Berlin urban square. Trade-off: a fixed HDR loses the procedural
-// probe's day/night tint, but reads far more real on glass/asphalt/cars.
-const ENV_URL = "/assets/env/potsdamer_platz_1k.hdr";
+// equirectangular ".hdr" (Babylon prefilters the .hdr on load). Trade-off: a fixed
+// HDR loses the procedural probe's day/night tint, but reads far more real on
+// glass/asphalt/cars.
+//
+// PHOTOREAL COHERENCE: this points at the SAME HDRI sky.js renders as the visible
+// skybox (/models/sky.hdr), so reflections in glass + wet asphalt match what's
+// actually overhead — the physically-correct look. (Was potsdamer_platz_1k, a
+// DIFFERENT image than the sky → reflections didn't match the sky, a non-photoreal
+// tell.) Browser caches the one file; the skybox uses it at full res, IBL prefilters
+// it to 256 — two GPU textures from one download, the correct pattern.
+const ENV_URL = "/models/sky.hdr";
 
 // GLB/glTF models keyed by logical name. e.g. strategicHQ: "/assets/buildings/tower.glb".
 const MODELS = {};
