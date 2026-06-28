@@ -11,10 +11,33 @@
 
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+
+// Target world length (Z) of a car — matches the old box car so lane spacing,
+// speeds, and the building-free road centres all stay tuned.
+const CAR_LEN = 4.4;
+// If authored cars drive tail-first, bump by Math.PI. Auto-orientation already
+// aligns the model's longest horizontal axis to the lane; this only flips front/back.
+const CAR_FACE_YAW = 0;
+
+// World-space bounding box over a node's meshes (after its world matrix is current).
+function measureExtent(node) {
+  let min = new Vector3(Infinity, Infinity, Infinity);
+  let max = new Vector3(-Infinity, -Infinity, -Infinity);
+  for (const m of node.getChildMeshes(false)) {
+    if (!m.getBoundingInfo) continue;
+    m.computeWorldMatrix(true);
+    const bb = m.getBoundingInfo().boundingBox;
+    min = Vector3.Minimize(min, bb.minimumWorld);
+    max = Vector3.Maximize(max, bb.maximumWorld);
+  }
+  if (!isFinite(min.x)) return null;
+  return { min, dx: max.x - min.x, dy: max.y - min.y, dz: max.z - min.z };
+}
 
 const CAR_COLORS = [
   new Color3(0.62, 0.10, 0.12), // deep red
@@ -45,40 +68,68 @@ export function createAmbient(ctx) {
   const disposables = [];
   let disposed = false;
 
-  // ── Shared car prototype per colour (body + cabin + 4 wheels → one merged mesh) ──
-  const wheelMat = new StandardMaterial("amb_wheel_mat", scene);
-  wheelMat.diffuseColor = new Color3(0.04, 0.04, 0.05); wheelMat.specularColor = new Color3(0, 0, 0);
-  disposables.push(wheelMat);
+  // Authored car GLBs (Kenney Car Kit, CC0) when present, else procedural boxes.
+  const carAssets = (ctx.carAssets && ctx.carAssets.length) ? ctx.carAssets : null;
 
-  const buildProto = (i, color) => {
-    const body = MeshBuilder.CreateBox(`amb_proto_body_${i}`, { width: 2.0, height: 0.85, depth: 4.4 }, scene);
-    body.position.y = 0.75;
-    const cabin = MeshBuilder.CreateBox(`amb_proto_cabin_${i}`, { width: 1.7, height: 0.78, depth: 2.3 }, scene);
-    cabin.position.set(0, 1.42, -0.25);
-    const paint = new PBRMaterial(`amb_paint_${i}`, scene);
-    paint.albedoColor = color; paint.metallic = 0.55; paint.roughness = 0.28; paint.environmentIntensity = 1.0; // catches IBL + SSR → reflective car bodies
-    body.material = paint; cabin.material = paint;
-    const wheels = [];
-    for (const [wx, wz] of [[-0.95, 1.4], [0.95, 1.4], [-0.95, -1.4], [0.95, -1.4]]) {
-      const w = MeshBuilder.CreateCylinder(`amb_proto_wheel_${i}`, { height: 0.35, diameter: 0.8, tessellation: 10 }, scene);
-      w.rotation.z = Math.PI / 2; w.position.set(wx, 0.4, wz); w.material = wheelMat;
-      wheels.push(w);
-    }
-    // Merge into one mesh (paint + wheels keep their materials via multiMaterial). isPickable
-    // off so combat raycasts ignore traffic. The merged mesh becomes car #0 of this colour.
-    const merged = Mesh.MergeMeshes([body, cabin, ...wheels], true, true, undefined, false, true);
-    merged.name = `amb_car_${i}_0`;
-    merged.isPickable = false;
-    disposables.push(merged, paint);
-    return merged;
-  };
+  // makeCar(idx, name) → { node, baseYaw, footY, inst? } | null. baseYaw aligns the
+  // model down the lane (length onto +Z); footY drops the wheels onto the road.
+  let makeCar;
 
-  const protos = CAR_COLORS.map((c, i) => buildProto(i, c));
-  if (protos.some((p) => !p)) return { dispose() {} };
-  // Hidden master-mesh pattern: the proto itself never draws (isVisible=false), only its
-  // instances do — so there are no stray cars parked at the origin. (setEnabled(false)
-  // would also kill the instances; isVisible=false hides only the source's own draw.)
-  for (const p of protos) p.isVisible = false;
+  if (carAssets) {
+    makeCar = (idx, name) => {
+      const asset = carAssets[idx % carAssets.length];
+      const inst = asset.instantiateModelsToScene(undefined, false); // share materials = cheap
+      const root = inst.rootNodes[0];
+      if (!root) { try { inst.dispose(); } catch { /* noop */ } return null; }
+      // Wrap in our own holder so the glTF import transform (units/handedness) stays intact.
+      const holder = new TransformNode(name, scene);
+      root.parent = holder;
+      holder.rotation.setAll(0); holder.scaling.setAll(1); holder.position.setAll(0);
+      holder.computeWorldMatrix(true);
+      const ext = measureExtent(holder);
+      if (!ext) { try { holder.dispose(); inst.dispose(); } catch { /* noop */ } return null; }
+      const s = CAR_LEN / Math.max(0.01, Math.max(ext.dx, ext.dz)); // fit length to CAR_LEN
+      holder.scaling.setAll(s);
+      const baseYaw = ext.dx > ext.dz ? Math.PI / 2 : 0; // model length on X → rotate onto Z
+      for (const m of holder.getChildMeshes(false)) m.isPickable = false; // combat ignores traffic
+      return { node: holder, inst, baseYaw, footY: -ext.min.y * s };
+    };
+  } else {
+    // ── Procedural fallback: one merged box car per colour (the original look) ──
+    const wheelMat = new StandardMaterial("amb_wheel_mat", scene);
+    wheelMat.diffuseColor = new Color3(0.04, 0.04, 0.05); wheelMat.specularColor = new Color3(0, 0, 0);
+    disposables.push(wheelMat);
+
+    const buildProto = (i, color) => {
+      const body = MeshBuilder.CreateBox(`amb_proto_body_${i}`, { width: 2.0, height: 0.85, depth: 4.4 }, scene);
+      body.position.y = 0.75;
+      const cabin = MeshBuilder.CreateBox(`amb_proto_cabin_${i}`, { width: 1.7, height: 0.78, depth: 2.3 }, scene);
+      cabin.position.set(0, 1.42, -0.25);
+      const paint = new PBRMaterial(`amb_paint_${i}`, scene);
+      paint.albedoColor = color; paint.metallic = 0.55; paint.roughness = 0.28; paint.environmentIntensity = 1.0; // catches IBL + SSR → reflective car bodies
+      body.material = paint; cabin.material = paint;
+      const wheels = [];
+      for (const [wx, wz] of [[-0.95, 1.4], [0.95, 1.4], [-0.95, -1.4], [0.95, -1.4]]) {
+        const w = MeshBuilder.CreateCylinder(`amb_proto_wheel_${i}`, { height: 0.35, diameter: 0.8, tessellation: 10 }, scene);
+        w.rotation.z = Math.PI / 2; w.position.set(wx, 0.4, wz); w.material = wheelMat;
+        wheels.push(w);
+      }
+      const merged = Mesh.MergeMeshes([body, cabin, ...wheels], true, true, undefined, false, true);
+      merged.name = `amb_car_${i}_0`;
+      merged.isPickable = false;
+      disposables.push(merged, paint);
+      return merged;
+    };
+
+    const protos = CAR_COLORS.map((c, i) => buildProto(i, c));
+    if (protos.some((p) => !p)) return { dispose() {} };
+    for (const p of protos) p.isVisible = false; // master never draws; only its instances do
+    makeCar = (idx, name) => {
+      const node = protos[idx % protos.length].createInstance(name);
+      node.isPickable = false;
+      return { node, baseYaw: 0, footY: CAR_Y };
+    };
+  }
 
   // ── Spawn cars across lanes, spaced out along Z ─────────────────────────────────
   // ponytail: no per-car shadow caster — instance shadows under an invisible CSM source
@@ -90,14 +141,16 @@ export function createAmbient(ctx) {
   for (let li = 0; li < LANES.length; li++) {
     const lane = LANES[li];
     for (let k = 0; k < CARS_PER_LANE; k++) {
-      const node = protos[carN % protos.length].createInstance(`amb_car_${li}_${k}`);
-      node.isPickable = false;
+      const made = makeCar(carN, `amb_car_${li}_${k}`);
+      if (!made) { carN++; continue; } // bad model instance → skip, keep the rest
+      const { node, baseYaw, footY, inst } = made;
       const t = (k + li * 0.37) / (CARS_PER_LANE + 1); // staggered start along the lane
       const z = minZ + (t % 1) * span;
       const speed = SPEED_MIN + ((carN * 37) % 100) / 100 * (SPEED_MAX - SPEED_MIN);
-      node.rotation = new Vector3(0, lane.dir > 0 ? 0 : Math.PI, 0);
-      node.position.set(lane.x, CAR_Y, z);
-      cars.push({ node, dir: lane.dir, speed, z });
+      const dirYaw = lane.dir > 0 ? 0 : Math.PI;
+      node.rotation = new Vector3(0, baseYaw + dirYaw + CAR_FACE_YAW, 0);
+      node.position.set(lane.x, footY, z);
+      cars.push({ node, inst, dir: lane.dir, speed, z });
       carN++;
     }
   }
@@ -116,7 +169,10 @@ export function createAmbient(ctx) {
   const dispose = () => {
     if (disposed) return; disposed = true;
     try { offFrame && offFrame(); } catch { /* noop */ }
-    for (const car of cars) { try { if (car.node.dispose) car.node.dispose(); } catch { /* noop */ } }
+    for (const car of cars) {
+      try { if (car.inst && car.inst.dispose) car.inst.dispose(); } catch { /* noop */ }
+      try { if (car.node && car.node.dispose) car.node.dispose(); } catch { /* noop */ }
+    }
     for (const d of disposables) { try { d.dispose && d.dispose(); } catch { /* noop */ } }
   };
 
