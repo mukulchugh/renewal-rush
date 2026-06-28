@@ -794,7 +794,7 @@ export function createEnemies(ctx) {
     ent.bodyMeshes = [torso, head, armL, armR, legL, legR, core, neck, pelvis, padL, padR, handL, handR, footL, footR, helmet, visor];
     if (crown) ent.bodyMeshes.push(crown);
     ent.human = ctx.humanAsset
-      ? spawnHuman(ctx.humanAsset, root, Vector3, { faceYaw: 0, gun, gunAsset: ctx.gunAsset, tint: coreBase })
+      ? spawnHuman(ctx.humanAsset, root, Vector3, { faceYaw: Math.PI, gun, gunAsset: ctx.gunAsset, tint: coreBase })
       : null;
     if (ent.human) for (const m of ent.bodyMeshes) m.setEnabled(false);
 
@@ -1755,15 +1755,18 @@ export function createEnemies(ctx) {
     moveTarget(ent, _tgt);
     if (ent.ai) {
       ent.ai.setMaxSpeed(ent.speed * (telegraphing ? 0.32 : 1));
-      // Blind ADVANCE (no LOS, memory stale): route to last-known via the navmesh so the agent
-      // searches AROUND buildings instead of beelining into a wall. Else Arrive to the FSM point.
-      const blindAdvance = ent.state === ST.ADVANCE && !ent.los && ent.seenAge > SEEN_FORGET;
+      // Intelligent navigation: when the FSM target is FAR, route to it through the navmesh so
+      // the agent walks AROUND buildings (no more grinding into a wall); when CLOSE, switch to
+      // direct Arrive for tight, responsive engage/strafe control. Re-path on a fixed cadence
+      // (no fxRng draw → banter/ragdoll determinism stays intact).
+      const tdx = _tgt.x - ent.root.position.x, tdz = _tgt.z - ent.root.position.z;
+      const far = (tdx * tdx + tdz * tdz) > 196; // ~14u: beyond → navigate; within → Arrive
       ent.repathCd -= dt;
-      if (blindAdvance) {
-        if (ent.repathCd <= 0) {
-          const path = enemyAI.pathTo(ent.root.position.x, ent.root.position.z, ent.lastKnownX, ent.lastKnownZ);
+      if (far && enemyAI.navMesh) {
+        if (ent.repathCd <= 0 || !ent.ai.onPath()) {
+          const path = enemyAI.pathTo(ent.root.position.x, ent.root.position.z, _tgt.x, _tgt.z);
           if (!ent.ai.setPath(path)) ent.ai.setTarget(_tgt.x, _tgt.z); // no route → direct
-          ent.repathCd = 0.6; // fixed cadence — no fxRng draw (keeps banter/ragdoll stream stable)
+          ent.repathCd = 0.5;
         }
       } else {
         ent.ai.setTarget(_tgt.x, _tgt.z);

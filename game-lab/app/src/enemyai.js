@@ -115,15 +115,18 @@ export function createEnemyAI({ bounds, footprints = [], navOpts } = {}) {
 
     const arrive = new ArriveBehavior(new YVec(x, 0, z), 3, 0.6);
     const sep = new SeparationBehavior();
-    sep.weight = cfg.sepWeight || 2.6;
+    sep.weight = cfg.sepWeight || 1.5;        // keep agents apart WITHOUT cancelling the advance
     const avoid = new ObstacleAvoidanceBehavior(obstacles);
-    avoid.weight = cfg.avoidWeight || 1.0;
+    avoid.weight = cfg.avoidWeight || 0.5;
     const follow = new FollowPathBehavior(new Path(), 1.2);
     follow.active = false;                    // off until a navmesh path is set
 
     v.steering.add(arrive);
     v.steering.add(sep);
-    v.steering.add(avoid);
+    // ObstacleAvoidance is NOT added by default: each building obstacle's radius is the building
+    // half-extent, which blankets the ROADS the agents stand on → constant avoidance = stuck.
+    // The navmesh path already routes around buildings. Opt in per-agent via cfg.avoid if needed.
+    if (cfg.avoid) v.steering.add(avoid);
     v.steering.add(follow);
     manager.add(v);
 

@@ -17,6 +17,7 @@ import { createCombat } from "./combat.js";
 import { createController } from "./controller.js";
 import { createAmbient } from "./ambient.js";
 import { createSky } from "./sky.js";
+import { createFinish } from "./finish.js";
 import { createMeta } from "./meta.js";
 
 const canvas = document.getElementById("game");
@@ -106,10 +107,25 @@ try {
     import("@babylonjs/core/Loading/sceneLoader"),
     import("@babylonjs/loaders/glTF"), // registers the glTF/GLB loader
   ]);
-  ctx.humanAsset = await LoadAssetContainerAsync("/models/xbot.glb", scene); // Mixamo X Bot (idle/run rig)
+  // Try each model in order; first that loads wins. Guarantees a TEXTURED human survives one
+  // model's load failure (functionality preserved) instead of dropping to ugly primitives.
+  // soldier first (the chosen look); xbot is the known-good untextured-but-rigged fallback.
+  // Each failure logs the FULL error so a broken model is diagnosable, not silently swallowed.
+  const HUMAN_MODELS = ["/models/soldier.glb", "/models/xbot.glb", "/models/human.glb"];
+  ctx.humanAsset = null;
+  for (const url of HUMAN_MODELS) {
+    try {
+      ctx.humanAsset = await LoadAssetContainerAsync(url, scene);
+      console.log("human model loaded:", url);
+      break;
+    } catch (e) {
+      console.error("human model failed to load:", url, "—", (e && (e.message || e.stack)) || e, e);
+    }
+  }
+  if (!ctx.humanAsset) console.error("all human models failed — using primitive avatars");
   ctx.gunAsset = await LoadAssetContainerAsync("/models/gun.glb", scene).catch(() => null); // Quaternius rifle (CC0)
 } catch (e) {
-  console.error("human model load failed — using primitive avatars", e);
+  console.error("human/gun loader init failed — using primitive avatars", e);
   ctx.humanAsset = null;
   ctx.gunAsset = null;
 }
@@ -141,6 +157,7 @@ step("hud", () => createHud(ctx));
 ctx.brand = step("brand", () => createBrand(ctx));
 step("enemies", () => createEnemies(ctx));
 step("ambient", () => createAmbient(ctx)); // decorative street traffic — no game-state coupling
+step("finish", () => createFinish(ctx)); // Times Square win-line: Quivly screen + reach-to-win marker
 step("combat", () => createCombat(ctx));
 step("controller", () => createController(ctx));
 // Stickiness layer last: needs ctx.brand (showResult) + must run its Last-Stand timeScale
@@ -154,12 +171,18 @@ if (typeof window !== "undefined") window.__rr = { engine, scene, game, state, c
 // which is meaningless under software-GL. Dynamic-imported so it never ships in the bundle.
 if (typeof window !== "undefined" && /[?&]perf=1\b/.test(location.search)) {
   (async () => {
+    // The GPU timer-query methods (engine.captureGPUFrameTime / startTimeQuery) live in a
+    // side-effect module that the tree-shaken build doesn't pull in — without it the setter
+    // throws "engine.captureGPUFrameTime is not a function". Import it first, then guard in case
+    // the EXT_disjoint_timer_query_webgl2 extension is absent (then gpuFrameMs just reads 0).
+    await import("@babylonjs/core/Engines/Extensions/engine.query");
     const { SceneInstrumentation } = await import("@babylonjs/core/Instrumentation/sceneInstrumentation");
     const { EngineInstrumentation } = await import("@babylonjs/core/Instrumentation/engineInstrumentation");
     const si = new SceneInstrumentation(scene);
     si.captureActiveMeshesEvaluationTime = true; si.captureFrameTime = true; si.captureRenderTime = true;
     const ei = new EngineInstrumentation(engine);
-    ei.captureGPUFrameTime = true; // timer-query ext; reads 0 where unsupported (e.g. software-GL)
+    let gpuOk = false;
+    try { ei.captureGPUFrameTime = true; gpuOk = true; } catch (e) { console.warn("[perf] GPU timer unavailable — gpuFrameMs will read 0", e); }
     const snap = () => ({
       fps: +engine.getFps().toFixed(1),
       drawCalls: si.drawCallsCounter.current,
@@ -167,7 +190,7 @@ if (typeof window !== "undefined" && /[?&]perf=1\b/.test(location.search)) {
       totalMeshes: scene.meshes.length,
       textures: scene.textures.length,
       cpuFrameMs: +si.frameTimeCounter.lastSecAverage.toFixed(2),
-      gpuFrameMs: +(ei.gpuFrameTimeCounter.lastSecAverage / 1e6).toFixed(2), // ns→ms
+      gpuFrameMs: gpuOk ? +(ei.gpuFrameTimeCounter.lastSecAverage / 1e6).toFixed(2) : 0, // ns→ms; 0 if timer ext absent
       hwScale: engine.getHardwareScalingLevel(),
     });
     window.__rr.perf = snap;
